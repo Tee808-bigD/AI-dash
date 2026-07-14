@@ -18,7 +18,7 @@ import requests
 # ─── Page Config ───────────────────────────────────────────
 st.set_page_config(
     page_title="AgentVerse — AI Agent Dashboard",
-    page_icon="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='32' y2='32'%3E%3Cstop offset='0%25' stop-color='%236c5ce7'/%3E%3Cstop offset='100%25' stop-color='%23a29bfe'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M16 4L26.5 10.5v13L16 30l-10.5-6.5v-13L16 4z' stroke='%23a29bfe' stroke-width='1.2' fill='none' opacity='0.5'/%3E%3Ccircle cx='16' cy='9' r='2.5' fill='url(%23g)'/%3E%3Ccircle cx='24' cy='16' r='2.5' fill='url(%23g)'/%3E%3Ccircle cx='16' cy='23' r='2.5' fill='url(%23g)'/%3E%3Ccircle cx='8' cy='16' r='2.5' fill='url(%23g)'/%3E%3Ccircle cx='16' cy='16' r='4' fill='url(%23g)'/%3E%3Ccircle cx='16' cy='16' r='1.8' fill='white' opacity='0.9'/%3E%3C/svg%3E",
+    page_icon="🧠",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -41,11 +41,7 @@ st.markdown(
     .main > div { padding: 0 !important; }
     .block-container { padding: 0 !important; max-width: 100% !important; }
 
-    /* ── Neural network logo pulse ── */
-    @keyframes logoPulse {
-        0%, 100% { filter: drop-shadow(0 0 6px rgba(108, 92, 231, 0.3)); transform: scale(1); }
-        50% { filter: drop-shadow(0 0 14px rgba(108, 92, 231, 0.6)); transform: scale(1.04) translateY(-2px); }
-    }
+    /* ── Logo shimmer animation ── */
     @keyframes shimmer {
         0% { background-position: -200% 0; }
         100% { background-position: 200% 0; }
@@ -80,15 +76,28 @@ st.markdown(
         text-decoration: none;
     }
     .av-brand-icon {
-        width: 40px; height: 40px;
-        display: flex; align-items: center; justify-content: center;
-        border-radius: 10px;
-        background: rgba(108, 92, 231, 0.12);
-        color: #a29bfe;
+        background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+        color: white;
+        padding: 0.5rem 0.6rem;
+        border-radius: 8px;
+        font-weight: 900;
+        font-size: 0.85rem;
+        box-shadow: 0 4px 12px rgba(108, 92, 231, 0.4);
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
-    .av-brand-icon svg {
-        width: 22px; height: 22px;
-        animation: logoPulse 3s ease-in-out infinite;
+    .av-brand-icon::after {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+        animation: shimmer 3s ease-in-out infinite;
     }
     .av-badge {
         display: inline-flex;
@@ -306,24 +315,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ─── Neural Network Logo SVG ──────────────────────────────
-NEURAL_LOGO_SVG = """
-<svg width="22" height="22" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M14 2L24.5 8.5V19.5L14 26L3.5 19.5V8.5L14 2Z" stroke="currentColor" stroke-width="1.5" opacity="0.4"/>
-  <circle cx="14" cy="7" r="2.5" fill="url(#g)"/>
-  <circle cx="21" cy="14" r="2.5" fill="url(#g)"/>
-  <circle cx="14" cy="21" r="2.5" fill="url(#g)"/>
-  <circle cx="7" cy="14" r="2.5" fill="url(#g)"/>
-  <circle cx="14" cy="14" r="3.5" fill="url(#g)"/>
-  <circle cx="14" cy="14" r="1.5" fill="white" opacity="0.9"/>
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="28" y2="28">
-      <stop offset="0%" stop-color="#6c5ce7"/>
-      <stop offset="100%" stop-color="#a29bfe"/>
-    </linearGradient>
-  </defs>
-</svg>
-"""
+# ─── Logo ─────────────────────────────────────────────────
+LOGO_HTML = """<span style="font-size:1.1rem;">⚡</span>"""
 
 # ─── Agent Definitions ────────────────────────────────────
 AGENTS = [
@@ -520,7 +513,7 @@ def render_header():
             <div class="av-header">
                 <a href="#" class="av-brand">
                     <div class="av-brand-icon" aria-hidden="true">
-                        {NEURAL_LOGO_SVG}
+                        ⚡
                     </div>
                     AgentVerse
                 </a>
