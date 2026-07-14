@@ -6,6 +6,7 @@ Streamlit version with the same neural network branding as the React app.
 import os
 import json
 import time
+import html
 import hashlib
 import random
 from datetime import datetime
@@ -536,11 +537,26 @@ def render_header():
 # ─── Tab Navigation ──────────────────────────────────────
 def render_tabs():
     tabs = ["Dashboard", "Agents", "Workflows"]
+    icons = ["📊", "🤖", "⚡"]
     cols = st.columns(len(tabs))
     for i, tab in enumerate(tabs):
         with cols[i]:
-            active = "active" if st.session_state.current_tab == tab else ""
-            if st.button(tab, key=f"tab_{tab}", use_container_width=True):
+            active = st.session_state.current_tab == tab
+            st.markdown(
+                f'<button onclick="" class="av-tab {"active" if active else ""}" '
+                f'onclick="alert(\'click\')">'
+                f'{icons[i]} {tab}'
+                f'</button>',
+                unsafe_allow_html=True,
+            )
+            # Use a tiny hidden button to handle the actual rerun
+            triggered = st.button(
+                f"{tab}",
+                key=f"tab_{tab}",
+                use_container_width=True,
+                type="secondary" if not active else "primary",
+            )
+            if triggered:
                 st.session_state.current_tab = tab
                 st.rerun()
 
@@ -732,13 +748,14 @@ def render_agents():
     for msg in messages:
         role_class = "user" if msg["role"] == "user" else "agent"
         role_label = "You" if msg["role"] == "user" else agent["name"]
-        st.markdown(
-            f'<div class="av-chat-msg {role_class}">'
-            f'<div class="role-label">{role_label}</div>'
-            f'{msg["content"]}'
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+        # Use Streamlit's native chat message component (auto-escapes HTML)
+        with st.chat_message("user" if role_class == "user" else "ai"):
+            st.markdown(
+                f'<div style="font-size:0.7rem;color:#6868a0;margin-bottom:0.3rem;font-weight:600;">'
+                f'{html.escape(role_label)}</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(msg["content"])
 
     st.markdown("</div></div></div>", unsafe_allow_html=True)
 
@@ -834,6 +851,7 @@ def render_workflows():
 # ─── Main App ────────────────────────────────────────────
 def main():
     render_header()
+    render_tabs()
 
     # Tab content
     if st.session_state.current_tab == "Dashboard":
@@ -842,8 +860,6 @@ def main():
         render_agents()
     elif st.session_state.current_tab == "Workflows":
         render_workflows()
-
-    render_tabs()
 
     # Footer
     st.markdown(
