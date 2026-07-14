@@ -1,0 +1,44 @@
+version: "3.8"
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # VITE_* env vars MUST be build args — Vite bakes them into the JS bundle
+      # at build time. Runtime environment variables have no effect on the SPA.
+      args:
+        - VITE_NVIDIA_API_KEY=${VITE_NVIDIA_API_KEY:-}
+        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL:-}
+        - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY:-}
+    ports:
+      - "${PORT:-80}:80"
+    depends_on:
+      api-proxy:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  api-proxy:
+    build:
+      context: ./api-proxy
+      dockerfile: Dockerfile
+    expose:
+      - "3001"
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      # Use Node.js instead of wget — Alpine's BusyBox wget doesn't support --spider
+      # Healthcheck: api-proxy fetches example.com and forwards its 200 response.
+      # A successful proxy pass means the service is working.
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/api/fetch?url=https://example.com', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  app-network:
+    driver: bridge
