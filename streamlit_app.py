@@ -315,9 +315,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ─── Logo ─────────────────────────────────────────────────
-LOGO_HTML = """<span style="font-size:1.1rem;">⚡</span>"""
-
 # ─── Agent Definitions ────────────────────────────────────
 AGENTS = [
     {
