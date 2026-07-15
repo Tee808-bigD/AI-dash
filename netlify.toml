@@ -40,6 +40,10 @@
         https://api.anthropic.com
         https://generativelanguage.googleapis.com
         https://emrgtjwofmsjiwfmsddi.supabase.co
+        https://api.agify.io
+        https://api.genderize.io
+        https://api.nationalize.io
+        https://api.dicebear.com
         wss:;
       font-src 'self' data:;
       frame-ancestors 'none';

@@ -49,7 +49,7 @@ function cspPlugin(): PluginOption {
             "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
             "style-src 'self' 'unsafe-inline'; " +
             "img-src 'self' data: https:; " +
-            "connect-src 'self' https://*.duckduckgo.com https://integrate.api.nvidia.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com wss:; " +
+            "connect-src 'self' https://*.duckduckgo.com https://integrate.api.nvidia.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://emrgtjwofmsjiwfmsddi.supabase.co https://api.agify.io https://api.genderize.io https://api.nationalize.io https://api.dicebear.com wss:; " +
             "font-src 'self' data:; " +
             "frame-ancestors 'none'; " +
             "base-uri 'self'; " +

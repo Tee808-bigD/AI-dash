@@ -111,16 +111,16 @@ export default function AgentCreateModal({ onClose }: AgentCreateModalProps) {
           <div className="create-step">
             <h4 style={{ color: 'var(--text-primary)', marginBottom: '1.5rem' }}>Configure Agent</h4>
             <div className="form-group">
-              <label>Agent Name</label>
-              <input className="form-input" placeholder="Enter a unique name..." value={name} onChange={(e) => setName(e.target.value)} />
+              <label htmlFor="agent-name">Agent Name</label>
+              <input id="agent-name" name="agent-name" className="form-input" placeholder="Enter a unique name..." value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="form-group">
-              <label>Description</label>
-              <textarea className="form-textarea" placeholder="What does this agent do?" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+              <label htmlFor="agent-description">Description</label>
+              <textarea id="agent-description" name="agent-description" className="form-textarea" placeholder="What does this agent do?" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
             </div>
             <div className="form-group">
-              <label>System Prompt</label>
-              <textarea className="form-textarea" placeholder="Instructions that define the agent's personality and capabilities..." value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={4} />
+              <label htmlFor="agent-system-prompt">System Prompt</label>
+              <textarea id="agent-system-prompt" name="agent-system-prompt" className="form-textarea" placeholder="Instructions that define the agent's personality and capabilities..." value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={4} />
             </div>
             <div className="form-group">
               <label>Temperature: {temperature.toFixed(1)}</label>

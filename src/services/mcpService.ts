@@ -128,14 +128,14 @@ const FETCH_HEADERS = {
  */
 export async function searchWeb(query: string, maxResults = 5): Promise<{ title: string; url: string; snippet: string }[]> {
   const results: { title: string; url: string; snippet: string }[] = [];
-  const isDev = typeof window !== 'undefined' &&
-    ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+
+  // Always use proxy paths (/api/ddg/, /api/search/) to avoid CORS.
+  // Dev: Vite dev server proxies these.
+  // Prod: nginx proxies these.
 
   // Try DuckDuckGo Instant Answer API first
   try {
-    const ddgUrl = isDev
-      ? `/api/ddg/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`
-      : `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+    const ddgUrl = `/api/ddg/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
     const ddgRes = await fetch(ddgUrl, { signal: AbortSignal.timeout(8000) });
     if (ddgRes.ok) {
       const data = await ddgRes.json() as {
@@ -168,9 +168,7 @@ export async function searchWeb(query: string, maxResults = 5): Promise<{ title:
 
   // Fallback: DuckDuckGo Lite HTML search
   try {
-    const liteUrl = isDev
-      ? `/api/search/?q=${encodeURIComponent(query)}`
-      : `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
+    const liteUrl = `/api/search/?q=${encodeURIComponent(query)}`;
     const liteRes = await fetch(liteUrl, { signal: AbortSignal.timeout(10000) });
     if (liteRes.ok) {
       const html = await liteRes.text();
@@ -195,6 +193,8 @@ export async function searchWeb(query: string, maxResults = 5): Promise<{ title:
 /**
  * Standalone URL reader — fetch and return plain text from any URL.
  * Used directly by chat interfaces for fetching content before AI calls.
+ * In dev mode, routes through the /api/fetch/ Vite proxy to avoid CORS.
+ * In production, fetches directly (most public APIs allow this).
  */
 export async function readUrl(url: string): Promise<string> {
   const isDev = typeof window !== 'undefined' &&
@@ -273,9 +273,8 @@ async function executeBuiltinTool(
   toolName: string,
   args: Record<string, unknown>,
 ): Promise<string | null> {
-  // Use Vite proxy in dev mode to avoid CORS; direct URLs in production/Node
-  const isDev = typeof window !== 'undefined' &&
-    ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+  // Always use proxy paths for DuckDuckGo to avoid CORS.
+  // Dev: Vite dev server proxies. Prod: nginx proxies.
 
   switch (toolName) {
     case 'search_web': {
@@ -284,9 +283,7 @@ async function executeBuiltinTool(
 
       try {
         // Step 1: Try DuckDuckGo Lite (returns real search results as HTML)
-        const liteUrl = isDev
-          ? `/api/search/?q=${encodeURIComponent(query)}`
-          : `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
+        const liteUrl = `/api/search/?q=${encodeURIComponent(query)}`;
 
         const liteResp = await fetch(liteUrl, {
           headers: FETCH_HEADERS,
@@ -307,9 +304,7 @@ async function executeBuiltinTool(
         }
 
         // Step 2: Fall back to DuckDuckGo Instant Answer API
-        const ddgUrl = isDev
-          ? `/api/ddg/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`
-          : `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+        const ddgUrl = `/api/ddg/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
 
         const ddgResp = await fetch(ddgUrl, {
           headers: FETCH_HEADERS,
@@ -349,7 +344,11 @@ async function executeBuiltinTool(
         return 'Error: URL must start with http:// or https://';
       }
 
+      const isDev = typeof window !== 'undefined' &&
+        ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+
       try {
+        // Use Vite proxy in dev, direct fetch in production
         const fetchUrl = isDev
           ? `/api/fetch/?url=${encodeURIComponent(targetUrl)}`
           : targetUrl;
