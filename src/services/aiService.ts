@@ -22,23 +22,15 @@ interface AnthropicResponse {
 }
 
 /**
- * Detect if we're running in a browser dev environment.
- * When true, API calls that are blocked by CORS can be routed
- * through the Vite dev proxy to bypass browser restrictions.
- */
-function isDevMode(): boolean {
-  return typeof window !== 'undefined' &&
-    ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
-}
-
-/**
  * Get the correct API base URL for a provider.
- * In dev mode, route NVIDIA API calls through the Vite proxy
- * to avoid CORS issues. All other providers use the original URL.
+ * Always route NVIDIA API calls through the proxy (/api/nvidia)
+ * to avoid CORS issues in both dev and production.
+ * - Dev:  Vite dev server proxies /api/nvidia/*
+ * - Prod: nginx proxies /api/nvidia/*
  */
 function getApiBaseUrl(keyConfig: APIKeyConfig): string {
-  if (isDevMode() && keyConfig.provider === 'nvidia') {
-    // Use Vite dev proxy to bypass CORS
+  if (keyConfig.provider === 'nvidia') {
+    // Use proxy to bypass CORS (works in dev via Vite, prod via nginx)
     return '/api/nvidia';
   }
   return keyConfig.baseUrl.replace(/\/$/, '');
