@@ -1,6 +1,21 @@
 # ── Stage 1: Build the Vite application ──────────────────
 FROM node:20-alpine AS builder
 
+# ═══════════════════════════════════════════════════════════
+# Build-time environment variables
+# VITE_* vars are baked into the JS bundle at build time.
+# Docker Compose passes these via `args:`.
+# Render passes these via Dashboard → Environment → Build Args.
+# ═══════════════════════════════════════════════════════════
+ARG VITE_NVIDIA_API_KEY
+ENV VITE_NVIDIA_API_KEY=$VITE_NVIDIA_API_KEY
+
+ARG VITE_SUPABASE_URL
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+
+ARG VITE_SUPABASE_ANON_KEY
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+
 WORKDIR /app
 
 # Install dependencies (cached separately from source)
