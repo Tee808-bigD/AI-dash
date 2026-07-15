@@ -1,5 +1,6 @@
 /// <reference types="vitest" />
-import { defineConfig, type PluginOption } from 'vitest/config'
+import { defineConfig } from 'vitest/config'
+import type { PluginOption, ViteDevServer } from 'vite'
 import { promises as dns } from 'dns'
 import react from '@vitejs/plugin-react'
 import type { IncomingMessage, ServerResponse } from 'http'
@@ -38,8 +39,8 @@ function isPrivateHostname(hostname: string): boolean {
 function cspPlugin(): PluginOption {
   return {
     name: 'csp-headers',
-    configureServer(server) {
-      server.middlewares.use((_req, res, _next) => {
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use((_req: IncomingMessage, res: ServerResponse, _next: (err?: unknown) => void) => {
         const originalWriteHead = res.writeHead;
         res.writeHead = function (statusCode: number, ...args: any[]) {
           const headers = typeof args[0] === 'object' && args[0] !== null ? args[0] as Record<string, string> : {};
@@ -74,8 +75,8 @@ function fetchProxyPlugin(): PluginOption {
 
   return {
     name: 'fetch-proxy',
-    configureServer(server) {
-      server.middlewares.use('/api/fetch', async (req: IncomingMessage, res: ServerResponse, _next) => {
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use('/api/fetch', async (req: IncomingMessage, res: ServerResponse, _next: (err?: unknown) => void) => {
         // Only handle GET requests
         if (req.method !== 'GET') {
           res.statusCode = 405;
@@ -121,7 +122,8 @@ function fetchProxyPlugin(): PluginOption {
           // Try DNS resolution for hostnames that might point to internal IPs
           try {
             const resolved = await dns.lookup(parsedHostname, 4);
-            if (isPrivateHostname(resolved)) {
+            const resolvedStr = typeof resolved === 'string' ? resolved : resolved.address;
+            if (isPrivateHostname(resolvedStr)) {
               res.statusCode = 403;
               res.setHeader('Content-Type', 'application/json');
               res.end(JSON.stringify({
@@ -145,7 +147,8 @@ function fetchProxyPlugin(): PluginOption {
           // resolve to private IPs (e.g., internal.company.com → 10.0.0.5)
           try {
             const resolved = await dns.lookup(parsedHostname, 4);
-            if (isPrivateHostname(resolved)) {
+            const resolvedStr = typeof resolved === 'string' ? resolved : resolved.address;
+            if (isPrivateHostname(resolvedStr)) {
               res.statusCode = 403;
               res.setHeader('Content-Type', 'application/json');
               res.end(JSON.stringify({
