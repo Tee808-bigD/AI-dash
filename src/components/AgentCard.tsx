@@ -3,7 +3,7 @@ import type { Agent } from '../types';
 import { AGENT_ROLE_CONFIG } from '../types';
 import { formatTime } from '../data/storage';
 import { ROLE_ICONS } from './Icons';
-import { MessageSquare, User, CheckCircle2, Clock, ChevronRight } from 'lucide-react';
+import { MessageSquare, CheckCircle2, Clock, ChevronRight } from 'lucide-react';
 
 interface AgentCardProps {
   agent: Agent;

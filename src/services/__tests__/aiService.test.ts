@@ -9,7 +9,7 @@ import { resetRateLimits } from '../security';
 // ─── Mock SSE streaming helper ────────────────────────────
 // Creates a mock Response-like object that simulates Server-Sent Events
 // for testing the private streamAIAPI and parseSSE functions via queryAgent.
-function createMockSSEResponse(sseDataLines: string[]): any {
+function createMockSSEResponse(sseDataLines: string[]): Partial<Response> {
   // sseDataLines: full SSE data, e.g.
   // ['data: {"choices":[{"delta":{"content":"hello"}}]}', '', 'data: [DONE]', '']
   const fullText = sseDataLines.join('\n') + '\n';
@@ -47,7 +47,7 @@ function createMockSSEResponse(sseDataLines: string[]): any {
     text: async () => fullText,
     json: async () => { throw new Error('Not available'); },
     clone: function () { return createMockSSEResponse(sseDataLines) as Response; },
-  } as Response;
+  } as unknown as Response;
 }
 
 // Creates an OpenAI-compatible streaming SSE response from content chunks

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { parseToolCall, buildToolSystemPrompt, executeTool, discoverTools } from '../mcpService';
-import { getMCPServers, setMCPServers } from '../../data/storage';
+import { setMCPServers } from '../../data/storage';
 import type { MCPServer } from '../../types';
 
 // ─── Mock storage ─────────────────────────────────────────

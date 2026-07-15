@@ -21,10 +21,6 @@ export default function AgentChat({ agent, messages }: AgentChatProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const roleConfig = AGENT_ROLE_CONFIG[agent.role];
 
-  // Waiting for first token → show typing indicator dots
-  const isWaitingForFirstToken = useMemo(() => {
-    return sending && messages.some(m => m.role === 'agent' && m.content === '');
-  }, [sending, messages]);
   // Tokens are flowing → show streaming cursor + glow
   const isStreamingActive = useMemo(() => {
     return sending && messages.some(m => m.role === 'agent' && m.content !== '');

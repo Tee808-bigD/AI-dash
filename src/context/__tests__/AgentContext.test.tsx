@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { AgentProvider, useAgents } from '../AgentContext';
-import type { Agent, APIKeyConfig, MCPServer, Workflow, AgentMessage } from '../../types';
+import type { Agent, APIKeyConfig, MCPServer, Workflow } from '../../types';
 import type { ReactNode } from 'react';
 import { queryAgent } from '../../services/aiService';
 
@@ -259,9 +259,8 @@ describe('AgentProvider — cancelTask (AbortController fix)', () => {
     const agent = getContext().agents.find(a => a.name === 'Task Runner')!;
 
     // Start a task (this triggers async execution that we can cancel)
-    let taskPromise: Promise<void>;
     act(() => {
-      taskPromise = getContext().createTask(agent.id, 'Test Task', 'Test', 'Do something');
+      getContext().createTask(agent.id, 'Test Task', 'Test', 'Do something');
     });
 
     // Give it a moment to start

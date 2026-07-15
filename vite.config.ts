@@ -1,6 +1,6 @@
 /// <reference types="vitest" />
-import { defineConfig, type PluginOption } from 'vite'
-import * as net from 'net'
+import { defineConfig, type PluginOption } from 'vitest/config'
+import { promises as dns } from 'dns'
 import react from '@vitejs/plugin-react'
 import type { IncomingMessage, ServerResponse } from 'http'
 
@@ -39,9 +39,9 @@ function cspPlugin(): PluginOption {
   return {
     name: 'csp-headers',
     configureServer(server) {
-      server.middlewares.use((_req, res, next) => {
+      server.middlewares.use((_req, res, _next) => {
         const originalWriteHead = res.writeHead;
-        res.writeHead = function (statusCode: number, ...args: unknown[]) {
+        res.writeHead = function (statusCode: number, ...args: any[]) {
           const headers = typeof args[0] === 'object' && args[0] !== null ? args[0] as Record<string, string> : {};
           headers['Content-Security-Policy'] =
             "default-src 'self'; " +
@@ -53,9 +53,9 @@ function cspPlugin(): PluginOption {
             "frame-ancestors 'none'; " +
             "base-uri 'self'; " +
             "form-action 'self';";
-          return originalWriteHead.call(this, statusCode, headers, ...args.slice(headers ? 1 : 0));
+          return originalWriteHead.call(this, statusCode, ...args);
         };
-        next();
+        _next();
       });
     },
   };
@@ -75,7 +75,7 @@ function fetchProxyPlugin(): PluginOption {
   return {
     name: 'fetch-proxy',
     configureServer(server) {
-      server.middlewares.use('/api/fetch', async (req: IncomingMessage, res: ServerResponse, next) => {
+      server.middlewares.use('/api/fetch', async (req: IncomingMessage, res: ServerResponse, _next) => {
         // Only handle GET requests
         if (req.method !== 'GET') {
           res.statusCode = 405;
@@ -120,7 +120,7 @@ function fetchProxyPlugin(): PluginOption {
         if (isPrivateHostname(parsedHostname)) {
           // Try DNS resolution for hostnames that might point to internal IPs
           try {
-            const resolved = await net.promises.lookup(parsedHostname, 4);
+            const resolved = await dns.lookup(parsedHostname, 4);
             if (isPrivateHostname(resolved)) {
               res.statusCode = 403;
               res.setHeader('Content-Type', 'application/json');
@@ -144,7 +144,7 @@ function fetchProxyPlugin(): PluginOption {
           // Even for non-localhost hostnames, do a DNS check to block hostnames that
           // resolve to private IPs (e.g., internal.company.com → 10.0.0.5)
           try {
-            const resolved = await net.promises.lookup(parsedHostname, 4);
+            const resolved = await dns.lookup(parsedHostname, 4);
             if (isPrivateHostname(resolved)) {
               res.statusCode = 403;
               res.setHeader('Content-Type', 'application/json');
@@ -270,7 +270,7 @@ export default defineConfig({
           proxy.on('error', (err) => {
             console.warn('[Vite Proxy] NVIDIA API error:', err.message);
           });
-          proxy.on('proxyReq', (proxyReq, req) => {
+          proxy.on('proxyReq', (_proxyReq, req) => {
             // Log the proxied request at verbose level
             console.log(`[Vite Proxy] → NVIDIA API: ${(req as IncomingMessage).method} ${(req as IncomingMessage).url}`);
           });

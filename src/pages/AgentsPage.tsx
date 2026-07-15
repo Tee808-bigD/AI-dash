@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useAgents } from '../context/AgentContext';
 import AgentCard from '../components/AgentCard';
 import AgentCreateModal from '../components/AgentCreateModal';
@@ -7,7 +7,7 @@ import LoadingSkeleton from '../components/LoadingSkeleton';
 import type { AgentRole, AgentMessage } from '../types';
 import { AGENT_ROLE_CONFIG } from '../types';
 import { searchWeb } from '../services/mcpService';
-import { Plus, Search as SearchIcon, Users, CheckCircle2, CircleDot, XCircle, Zap, MessageSquare, Send, User, X, Loader2, Trash2, Globe, Bot } from 'lucide-react';
+import { Plus, Search as SearchIcon, CheckCircle2, CircleDot, XCircle, Zap, MessageSquare, Send, User, X, Loader2, Globe, Bot } from 'lucide-react';
 
 export default function AgentsPage() {
   const { agents, loading, sendMessage, getAgentMessages, addToast } = useAgents();
@@ -16,7 +16,6 @@ export default function AgentsPage() {
   const [filterRole, setFilterRole] = useState<AgentRole | 'all'>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [chatAgentId, setChatAgentId] = useState<string | null>(null);
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Open chat from URL param

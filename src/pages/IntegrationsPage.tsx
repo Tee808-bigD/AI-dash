@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAgents } from '../context/AgentContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import {
-  Plus, Trash2, Server, Key, Webhook, Power, PowerCircle,
+  Plus, Trash2, Server, Key, Webhook, Power,
   CheckCircle2, XCircle, AlertTriangle, Globe, Database,
   Zap, Eye, EyeOff, X, RefreshCw, Bot
 } from 'lucide-react';

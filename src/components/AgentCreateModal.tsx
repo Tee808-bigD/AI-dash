@@ -91,7 +91,7 @@ export default function AgentCreateModal({ onClose }: AgentCreateModalProps) {
                     tabIndex={0}
                     onKeyDown={(e) => e.key === 'Enter' && setRole(key)}
                   >
-                    <Icon size={32} style={{ color: cfg.color }} />
+                    <div style={{ color: cfg.color }}><Icon size={32} /></div>
                     <div className="role-name">{cfg.label}</div>
                     <div className="role-desc">{cfg.description}</div>
                   </div>

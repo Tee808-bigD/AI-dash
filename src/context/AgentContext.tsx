@@ -7,7 +7,7 @@ import {
   getAgents as fetchAgents, setAgents as saveAgents,
   getTasks as fetchTasks, setTasks as saveTasks,
   getWorkflows as fetchWorkflows, setWorkflows as saveWorkflows,
-  getMessages as fetchMessages, setMessages as saveMessages,
+  setMessages as saveMessages,
   getAPIKeys as fetchAPIKeys, setAPIKeys as saveAPIKeys,
   getMCPServers as fetchMCPServers, setMCPServers as saveMCPServers,
 } from '../services/supabaseService';

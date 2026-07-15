@@ -606,7 +606,6 @@ export async function queryAgent(
   // Rate limiting: max 10 calls per agent per 5 seconds
   const rateLimitKey = `agent:${agent.id}`;
   if (!checkRateLimit(rateLimitKey, 10, 5000)) {
-    const waitMs = 5000;
     return `_I'm receiving too many requests. Please wait a moment and try again._\n\n---\n_Rate limit exceeded. You can send another message in a few seconds._`;
   }
 

@@ -156,6 +156,7 @@ export const SAMPLE_WORKFLOWS: Workflow[] = [
     id: generateId(),
     name: 'Market Research Report',
     description: 'End-to-end research pipeline: gather data, analyze trends, generate report',
+    category: 'research',
     steps: [
       { id: generateId(), agentId: 'agent_1', agentName: 'Athena', prompt: 'Research the latest trends in AI engineering', order: 1 },
       { id: generateId(), agentId: 'agent_3', agentName: 'Nova', prompt: 'Analyze the research findings and identify key patterns', order: 2 },
@@ -168,6 +169,7 @@ export const SAMPLE_WORKFLOWS: Workflow[] = [
     id: generateId(),
     name: 'Code Review Pipeline',
     description: 'Automated code review: analyze code, check best practices, generate documentation',
+    category: 'development',
     steps: [
       { id: generateId(), agentId: 'agent_2', agentName: 'Neo', prompt: 'Review the provided code for bugs and best practices', order: 1 },
       { id: generateId(), agentId: 'agent_4', agentName: 'Luna', prompt: 'Generate documentation for the reviewed code', order: 2 },

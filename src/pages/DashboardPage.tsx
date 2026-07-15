@@ -7,7 +7,7 @@ import TaskHistory from '../components/TaskHistory';
 import AgentCreateModal from '../components/AgentCreateModal';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import { AGENT_ROLE_CONFIG } from '../types';
-import { Plus, Users, Zap, CheckCircle2, TrendingUp, Workflow, Send, ChevronRight, Bot, ClipboardList, CircleDot, XCircle, MessageSquare } from 'lucide-react';
+import { Plus, Users, Zap, CheckCircle2, TrendingUp, Workflow, Send, ChevronRight, Bot, ClipboardList, CircleDot, XCircle } from 'lucide-react';
 
 /* Helper skeleton block for the loading state */
 function SkeletonBlock({ width, height }: { width: string; height: string }) {
