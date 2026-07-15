@@ -77,7 +77,8 @@ export default function AgentChat({ agent, messages }: AgentChatProps) {
   const formatContent = (content: string) => {
     // Sanitize content against XSS before rendering
     const safeContent = sanitizeChatContent(content);
-    const parts = safeContent.split(/(```[\s\S]*?```)/g);
+    // Split into code blocks, image markdown, and text
+    const parts = safeContent.split(/(```[\s\S]*?```|!\[[^\]]*\]\([^)]+\))/g);
     return parts.map((part, i) => {
       if (part.startsWith('```')) {
         const code = part.replace(/```\w*\n?/, '').replace(/```$/, '');
@@ -85,6 +86,27 @@ export default function AgentChat({ agent, messages }: AgentChatProps) {
           <pre key={i} className="chat-code-block">
             <code>{code}</code>
           </pre>
+        );
+      }
+      // Render markdown images inline
+      const imgMatch = part.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+      if (imgMatch) {
+        const alt = imgMatch[1];
+        const src = imgMatch[2];
+        // Detect if it's a chart image (QuickChart) or other image
+        const isChart = src.includes('quickchart.io');
+        return (
+          <div key={i} className={`chat-image-wrapper ${isChart ? 'chat-chart-wrapper' : ''}`}>
+            <img
+              src={src}
+              alt={alt}
+              className={isChart ? 'chat-chart-image' : 'chat-inline-image'}
+              loading="lazy"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          </div>
         );
       }
       return <span key={i}>{part}</span>;

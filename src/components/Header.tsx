@@ -26,11 +26,12 @@ export default function Header() {
       <div className="container nav">
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
           <Link to="/" className="brand" aria-label="AI Agent Dashboard Home" onClick={closeMenu}>
-            <div className="brand-icon" aria-hidden="true">
-              <Zap size={18} />
+            <div className="brand-icon" aria-hidden="true" role="img" aria-label="AgentVerse AI logo">
+              <img src="/logo.svg" alt="AgentVerse" className="brand-logo-image" />
             </div>
             <span className="brand-text">
-              AgentVerse
+              <span className="brand-text-agent">Agent</span>
+              <span className="brand-text-verse">Verse</span>
             </span>
           </Link>
           <button

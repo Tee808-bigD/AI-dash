@@ -42,6 +42,78 @@ const BUILTIN_TOOLS: MCPTool[] = [
       required: ['url'],
     }),
   },
+  {
+    name: 'generate_chart',
+    description: 'Generate a chart/graph image (bar, line, pie, doughnut, radar, polarArea, bubble, scatter) from data. Returns a markdown image URL. Use this to create visual data representations for reports and dashboards.',
+    inputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        type: { type: 'string', description: 'Chart type: bar, line, pie, doughnut, radar, polarArea, bubble, scatter' },
+        labels: { type: 'array', description: 'Array of label strings for the x-axis or categories', items: { type: 'string' } },
+        datasets: { type: 'array', description: 'Array of dataset objects. Each has: label (string), data (array of numbers), backgroundColor (optional string or array), borderColor (optional string)' },
+        title: { type: 'string', description: 'Optional chart title text' },
+        width: { type: 'number', description: 'Image width in pixels (default 600)' },
+        height: { type: 'number', description: 'Image height in pixels (default 350)' },
+      },
+      required: ['type', 'labels', 'datasets'],
+    }),
+  },
+  {
+    name: 'random_cat',
+    description: 'Get a random cat image URL. Can also get a cat image with text overlaid. Useful for adding fun visuals or testing image rendering.',
+    inputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'Optional text to display on the cat image' },
+        filter: { type: 'string', description: 'Optional filter effect: blur, mono, sepia, negative, paint, pixel' },
+      },
+    }),
+  },
+  {
+    name: 'get_favicon',
+    description: 'Get the favicon (website icon) URL for any domain. Uses the Icon Horse API. Returns a small icon image URL representing the website.',
+    inputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        domain: { type: 'string', description: 'The domain to fetch the favicon for (e.g., "github.com", "ycombinator.com")' },
+        size: { type: 'number', description: 'Icon size in pixels (default 64, max 512)' },
+      },
+      required: ['domain'],
+    }),
+  },
+  {
+    name: 'predict_age',
+    description: 'Predict the age of a person based on their first name. Uses the Agify.io API. Returns estimated age and count of samples.',
+    inputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'The first name to predict age for' },
+      },
+      required: ['name'],
+    }),
+  },
+  {
+    name: 'predict_gender',
+    description: 'Predict the gender of a person based on their first name. Uses the Genderize.io API. Returns estimated gender (male/female) and probability.',
+    inputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'The first name to predict gender for' },
+      },
+      required: ['name'],
+    }),
+  },
+  {
+    name: 'predict_nationality',
+    description: 'Predict the nationality of a person based on their first name. Uses the Nationalize.io API. Returns a list of most likely countries with probabilities.',
+    inputSchema: JSON.stringify({
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'The first name to predict nationality for' },
+      },
+      required: ['name'],
+    }),
+  },
 ];
 
 /** Shared headers for all HTTP requests */
@@ -146,7 +218,56 @@ export async function readUrl(url: string): Promise<string> {
 }
 
 /**
- * Execute a built-in web tool (search_web, read_url).
+ * Generate a QuickChart URL from chart configuration.
+ */
+export function buildChartUrl(
+  type: string,
+  labels: string[],
+  datasets: { label: string; data: number[]; backgroundColor?: string | string[]; borderColor?: string }[],
+  title?: string,
+  width?: number,
+  height?: number,
+): string {
+  const chartConfig: Record<string, unknown> = {
+    type,
+    data: {
+      labels,
+      datasets: datasets.map(d => ({
+        label: d.label,
+        data: d.data,
+        backgroundColor: d.backgroundColor || undefined,
+        borderColor: d.borderColor || undefined,
+        ...(type === 'line' ? { fill: false, tension: 0.3 } : {}),
+      })),
+    },
+    options: {
+      responsive: false,
+      plugins: {
+        legend: { labels: { color: '#e0e0e8', font: { size: 11 } } },
+      },
+      ...(title ? {
+        plugins: {
+          title: { display: true, text: title, color: '#f0f0f8', font: { size: 14, weight: 'bold' as const } },
+          legend: { labels: { color: '#e0e0e8', font: { size: 11 } } },
+        },
+      } : {}),
+    },
+  };
+
+  const params = new URLSearchParams({
+    c: JSON.stringify(chartConfig),
+    w: String(width || 600),
+    h: String(height || 350),
+    backgroundColor: 'transparent',
+    format: 'png',
+    version: '4',
+  });
+
+  return `https://quickchart.io/chart?${params.toString()}`;
+}
+
+/**
+ * Execute a built-in web tool (search_web, read_url, generate_chart, etc.).
  */
 async function executeBuiltinTool(
   toolName: string,
@@ -268,6 +389,105 @@ async function executeBuiltinTool(
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
         return `Failed to fetch URL: ${msg}`;
+      }
+    }
+
+    case 'generate_chart': {
+      const type = String(args.type || 'bar');
+      const labels = args.labels as string[] || [];
+      const datasets = args.datasets as { label: string; data: number[]; backgroundColor?: string | string[]; borderColor?: string }[] || [];
+      const title = args.title ? String(args.title) : undefined;
+      const width = args.width ? Number(args.width) : undefined;
+      const height = args.height ? Number(args.height) : undefined;
+
+      if (!labels.length || !datasets.length) {
+        return 'Error: labels and datasets are required for chart generation.';
+      }
+
+      const chartUrl = buildChartUrl(type, labels, datasets, title, width, height);
+
+      // Return markdown image that renders inline in chat
+      const description = title || `${type.charAt(0).toUpperCase() + type.slice(1)} Chart`;
+      return `![${description}](${chartUrl})\n\nChart generated successfully! Type: **${type}**, Datasets: ${datasets.length}, Data points: ${labels.length}`;
+    }
+
+    case 'random_cat': {
+      const text = args.text ? String(args.text) : '';
+      const filter = args.filter ? String(args.filter) : '';
+
+      let catUrl = 'https://cataas.com/cat';
+      if (text) catUrl += `/says/${encodeURIComponent(text)}`;
+      if (filter) catUrl += `?filter=${encodeURIComponent(filter)}`;
+
+      return `![Random Cat](${catUrl})\n\n🐱 Meow! Here's a random cat image${text ? ` saying "${text}"` : ''}${filter ? ` with ${filter} filter` : ''}.`;
+    }
+
+    case 'get_favicon': {
+      const domain = String(args.domain || '').trim();
+      const size = args.size ? Number(args.size) : 64;
+
+      if (!domain) return 'Error: No domain provided.';
+
+      const faviconUrl = `https://icon.horse/icon/${encodeURIComponent(domain)}`;
+      return `![${domain} favicon](${faviconUrl})\n\nFavicon for **${domain}** (${size}x${size}): ${faviconUrl}`;
+    }
+
+    case 'predict_age': {
+      const name = String(args.name || '').trim();
+      if (!name) return 'Error: No name provided.';
+
+      try {
+        const res = await fetch(`https://api.agify.io/?name=${encodeURIComponent(name)}`, {
+          headers: FETCH_HEADERS,
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) return `Age prediction failed (HTTP ${res.status})`;
+        const data = await res.json() as { name: string; age: number | null; count: number };
+        if (data.age === null) return `No data found for name "${name}".`;
+        return `**Age Prediction for "${name}"**\n- Estimated Age: **${data.age}**\n- Sample Count: ${data.count.toLocaleString()}`;
+      } catch (err) {
+        return `Age prediction failed: ${err instanceof Error ? err.message : 'Unknown error'}`;
+      }
+    }
+
+    case 'predict_gender': {
+      const name = String(args.name || '').trim();
+      if (!name) return 'Error: No name provided.';
+
+      try {
+        const res = await fetch(`https://api.genderize.io/?name=${encodeURIComponent(name)}`, {
+          headers: FETCH_HEADERS,
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) return `Gender prediction failed (HTTP ${res.status})`;
+        const data = await res.json() as { name: string; gender: string | null; probability: number; count: number };
+        if (data.gender === null) return `No data found for name "${name}".`;
+        return `**Gender Prediction for "${name}"**\n- Estimated Gender: **${data.gender.charAt(0).toUpperCase() + data.gender.slice(1)}**\n- Probability: **${(data.probability * 100).toFixed(1)}%**\n- Sample Count: ${data.count.toLocaleString()}`;
+      } catch (err) {
+        return `Gender prediction failed: ${err instanceof Error ? err.message : 'Unknown error'}`;
+      }
+    }
+
+    case 'predict_nationality': {
+      const name = String(args.name || '').trim();
+      if (!name) return 'Error: No name provided.';
+
+      try {
+        const res = await fetch(`https://api.nationalize.io/?name=${encodeURIComponent(name)}`, {
+          headers: FETCH_HEADERS,
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) return `Nationality prediction failed (HTTP ${res.status})`;
+        const data = await res.json() as { name: string; country: { country_id: string; probability: number }[] };
+        if (!data.country.length) return `No nationality data found for name "${name}".`;
+        const countryFlags = data.country.slice(0, 5).map(c => {
+          const flagCode = c.country_id.toLowerCase();
+          const flag = String.fromCodePoint(...[...flagCode].map(ch => 0x1F1E6 + ch.charCodeAt(0) - 97));
+          return `- ${flag} **${c.country_id}** — ${(c.probability * 100).toFixed(1)}%`;
+        }).join('\n');
+        return `**Nationality Prediction for "${name}"**\n${countryFlags}`;
+      } catch (err) {
+        return `Nationality prediction failed: ${err instanceof Error ? err.message : 'Unknown error'}`;
       }
     }
 
