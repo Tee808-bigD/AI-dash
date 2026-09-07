@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+:root {
+  --black:    #080C14;
+  --surface:  #0D1220;
+  --card:     #111827;
+  --border:   #1E2D45;
+  --border2:  #253449;
+  --violet:   #6C63FF;
+  --violet2:  #5148E8;
+  --cyan:     #00D4FF;
+  --white:    #F0F4FF;
+  --muted:    #8A97B0;
+  --dim:      #1E2D45;
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body:    'Inter', sans-serif;
+}
+
+.font-display {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #080C14;
+  color: #F0F4FF;
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 22s linear infinite;
+}
+
+/* Custom scrollbar matching Axon AI dark aesthetic */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #080C14;
+}
+::-webkit-scrollbar-thumb {
+  background: #1E2D45;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #6C63FF;
+}
