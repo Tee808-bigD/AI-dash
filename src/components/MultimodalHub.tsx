@@ -35,6 +35,7 @@ import DeveloperCodeModal from "./DeveloperCodeModal";
 import PromptOptimizerModal from "./PromptOptimizerModal";
 import MediaAssetBin from "./MediaAssetBin";
 import { getFallbackVideoFrame } from "../utils/fallbackImage";
+import { VideoPlayerModal } from "./video/VideoPlayerModal";
 
 export interface SuggestedStep {
   stepNumber: number;
@@ -121,6 +122,19 @@ interface WebsiteBundle {
 
 export default function MultimodalHub() {
   const [activeSubTab, setActiveSubTab] = useState<"pipeline" | "prototyping" | "gallery">("pipeline");
+
+  // Video Modal State for Playable & Downloadable Video
+  const [videoModalData, setVideoModalData] = useState<{
+    isOpen: boolean;
+    title: string;
+    prompt: string;
+    imageUrl: string;
+  }>({
+    isOpen: false,
+    title: "",
+    prompt: "",
+    imageUrl: ""
+  });
   
   // Prompt Optimizer Modal State
   const [isOptimizerOpen, setIsOptimizerOpen] = useState(false);
@@ -705,19 +719,32 @@ export default function MultimodalHub() {
                                 />
                               )}
                               {isVideo && output.outputUrl && (
-                                <div className="relative w-full h-full">
+                                <div 
+                                  onClick={() => {
+                                    setVideoModalData({
+                                      isOpen: true,
+                                      title: `Step 0${step.stepNumber}: ${step.modelName}`,
+                                      prompt: step.prompt,
+                                      imageUrl: output.outputUrl
+                                    });
+                                  }}
+                                  className="relative w-full h-full cursor-pointer group overflow-hidden rounded-lg"
+                                >
                                   <img 
                                     src={output.outputUrl} 
                                     alt="Step Output Video First Frame" 
-                                    className="object-cover w-full h-full rounded-lg blur-[1px]"
+                                    className="object-cover w-full h-full rounded-lg group-hover:scale-105 transition-transform duration-300"
                                     referrerPolicy="no-referrer"
                                     onError={(e) => {
                                       e.currentTarget.onerror = null;
                                       e.currentTarget.src = getFallbackVideoFrame(step.prompt);
                                     }}
                                   />
-                                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                                    <Film className="text-white drop-shadow-md animate-bounce" size={24} />
+                                  <div className="absolute inset-0 bg-black/40 group-hover:bg-black/60 transition-all flex items-center justify-center">
+                                    <div className="p-2.5 rounded-full bg-[#6c63ff] text-white shadow-xl group-hover:scale-110 transition-transform flex items-center gap-1.5 px-3.5 py-1.5">
+                                      <Play size={13} fill="currentColor" />
+                                      <span className="text-[10px] font-black uppercase tracking-wider">Play Video</span>
+                                    </div>
                                   </div>
                                 </div>
                               )}
@@ -1026,6 +1053,15 @@ export default function MultimodalHub() {
         modelId={codeModalConfig.modelId}
         prompt={codeModalConfig.prompt}
         type={codeModalConfig.type}
+      />
+
+      {/* Video Player & Download Modal */}
+      <VideoPlayerModal
+        isOpen={videoModalData.isOpen}
+        onClose={() => setVideoModalData(prev => ({ ...prev, isOpen: false }))}
+        title={videoModalData.title}
+        prompt={videoModalData.prompt}
+        imageUrl={videoModalData.imageUrl}
       />
     </div>
   );

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { getFallbackVideoFrame } from "../utils/fallbackImage";
+import { VideoPlayerModal } from "./video/VideoPlayerModal";
 import { 
   Sparkles, 
   Play, 
@@ -20,7 +21,8 @@ import {
   Eye, 
   CheckCircle2, 
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  Download
 } from "lucide-react";
 
 export interface SuggestedStep {
@@ -81,6 +83,17 @@ export default function VisualChainingCanvas({
   onOpenProtoStudio
 }: VisualChainingCanvasProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
+  const [videoModalData, setVideoModalData] = useState<{
+    isOpen: boolean;
+    title: string;
+    prompt: string;
+    imageUrl: string;
+  }>({
+    isOpen: false,
+    title: "",
+    prompt: "",
+    imageUrl: ""
+  });
 
   // Group steps by their DAG stages
   const imageStep = pipeline.suggestedSteps.find(s => s.type === "image");
@@ -609,7 +622,22 @@ export default function VisualChainingCanvas({
                 </div>
 
                 {/* Video Motion Preview Box */}
-                <div className="h-28 w-full rounded-xl bg-[#060c15] border border-[#16273a] flex items-center justify-center overflow-hidden relative">
+                <div 
+                  onClick={() => {
+                    const url = stepOutputs[videoStep.stepNumber]?.outputUrl;
+                    if (url) {
+                      setVideoModalData({
+                        isOpen: true,
+                        title: "NVIDIA VideoGPT Dynamic Motion",
+                        prompt: videoStep.prompt,
+                        imageUrl: url
+                      });
+                    }
+                  }}
+                  className={`h-28 w-full rounded-xl bg-[#060c15] border border-[#16273a] flex items-center justify-center overflow-hidden relative ${
+                    stepOutputs[videoStep.stepNumber]?.outputUrl ? "cursor-pointer group hover:border-amber-500/50 transition-all" : ""
+                  }`}
+                >
                   {isStepRunning(videoStep.stepNumber) ? (
                     <div className="text-center space-y-1.5 animate-pulse">
                       <Film className="text-amber-400 mx-auto animate-bounce" size={20} />
@@ -620,16 +648,17 @@ export default function VisualChainingCanvas({
                       <img 
                         src={stepOutputs[videoStep.stepNumber].outputUrl} 
                         alt="Video Motion Preview" 
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         referrerPolicy="no-referrer"
                         onError={(e) => {
                           e.currentTarget.onerror = null;
                           e.currentTarget.src = getFallbackVideoFrame(videoStep.prompt);
                         }}
                       />
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                        <div className="p-2 rounded-full bg-white/20 backdrop-blur-sm">
-                          <Film size={18} className="text-white" />
+                      <div className="absolute inset-0 bg-black/40 group-hover:bg-black/60 transition-all flex items-center justify-center gap-2">
+                        <div className="p-2 rounded-full bg-amber-500 text-black shadow-lg group-hover:scale-110 transition-transform flex items-center gap-1 px-3 py-1.5">
+                          <Play size={12} fill="currentColor" />
+                          <span className="text-[9px] font-black uppercase tracking-wider">Play Video</span>
                         </div>
                       </div>
                     </div>
@@ -768,6 +797,15 @@ export default function VisualChainingCanvas({
 
         </div>
       </div>
+
+      {/* Video Player & Download Modal */}
+      <VideoPlayerModal
+        isOpen={videoModalData.isOpen}
+        onClose={() => setVideoModalData(prev => ({ ...prev, isOpen: false }))}
+        title={videoModalData.title}
+        prompt={videoModalData.prompt}
+        imageUrl={videoModalData.imageUrl}
+      />
     </div>
   );
 }
