@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { getFallbackVideoFrame } from "../utils/fallbackImage";
 import { VideoPlayerModal } from "./video/VideoPlayerModal";
+import { MasterUnifiedModal } from "./MasterUnifiedModal";
 import { 
   Sparkles, 
   Play, 
@@ -27,7 +28,7 @@ import {
 
 export interface SuggestedStep {
   stepNumber: number;
-  type: "image" | "video" | "audio" | "code";
+  type: "image" | "video" | "audio" | "code" | "master";
   modelName: string;
   modelId: string;
   prompt: string;
@@ -57,6 +58,10 @@ interface VisualChainingCanvasProps {
     textResult?: string;
     latencyMs?: number;
     error?: string;
+    styleName?: string;
+    variantIndex?: number;
+    provider?: string;
+    seed?: number;
   }>;
   runningStepIdx: number | null;
   isRunningAll: boolean;
@@ -64,6 +69,8 @@ interface VisualChainingCanvasProps {
   onRunEntirePipeline: () => void;
   onResetPipeline: () => void;
   onUpdateStepPreset: (stepNumber: number, key: string, value: string) => void;
+  onUpdateStepPrompt?: (stepNumber: number, prompt: string) => void;
+  onHarmonizePrompts?: (stepNumber: number, basePrompt: string) => void;
   onAddCustomNode: () => void;
   onExportCode: () => void;
   onOpenProtoStudio?: () => void;
@@ -78,6 +85,8 @@ export default function VisualChainingCanvas({
   onRunEntirePipeline,
   onResetPipeline,
   onUpdateStepPreset,
+  onUpdateStepPrompt,
+  onHarmonizePrompts,
   onAddCustomNode,
   onExportCode,
   onOpenProtoStudio
@@ -88,11 +97,25 @@ export default function VisualChainingCanvas({
     title: string;
     prompt: string;
     imageUrl: string;
+    audioUrl?: string;
   }>({
     isOpen: false,
     title: "",
     prompt: "",
-    imageUrl: ""
+    imageUrl: "",
+    audioUrl: ""
+  });
+
+  const [masterModalData, setMasterModalData] = useState<{
+    isOpen: boolean;
+    title: string;
+    prompt: string;
+    imageUrl?: string;
+    audioUrl?: string;
+  }>({
+    isOpen: false,
+    title: "",
+    prompt: ""
   });
 
   // Group steps by their DAG stages
@@ -100,7 +123,8 @@ export default function VisualChainingCanvas({
   const videoStep = pipeline.suggestedSteps.find(s => s.type === "video");
   const audioStep = pipeline.suggestedSteps.find(s => s.type === "audio");
   const codeStep = pipeline.suggestedSteps.find(s => s.type === "code");
-  const customSteps = pipeline.suggestedSteps.filter(s => !["image", "video", "audio", "code"].includes(s.type));
+  const masterStep = pipeline.suggestedSteps.find(s => s.type === "master");
+  const customSteps = pipeline.suggestedSteps.filter(s => !["image", "video", "audio", "code", "master"].includes(s.type));
 
   const getNodeStatus = (stepNumber: number) => {
     return stepOutputs[stepNumber]?.status || "idle";
@@ -250,10 +274,20 @@ export default function VisualChainingCanvas({
             strokeWidth="2.5"
             strokeDasharray={isStepRunning(4) ? "6 6" : "none"}
           />
+
+          {/* Wire: Prototype Node -> Stage 5 Master Synthesis Node */}
+          <path
+            d="M 1250 310 C 1280 310, 1280 310, 1310 310"
+            fill="none"
+            stroke={getNodeStatus(5) === "completed" ? "#c49b66" : "#1a2c42"}
+            strokeWidth="2.5"
+            strokeDasharray={isStepRunning(5) ? "6 6" : "none"}
+            className={isStepRunning(5) ? "animate-pulse" : ""}
+          />
         </svg>
 
-        {/* 4-Stage Column Structure */}
-        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-4 gap-8 items-start min-w-[950px]">
+        {/* 5-Stage Column Structure */}
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-5 gap-6 items-start min-w-[1250px]">
           
           {/* ==================================================== */}
           {/* STAGE 1: INTENT & MULTIMODAL PARSER NODE            */}
@@ -363,47 +397,107 @@ export default function VisualChainingCanvas({
                   </span>
                 </div>
 
-                {/* Live Knob Controls */}
-                <div className="space-y-1.5">
-                  <label className="text-[8px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
-                    <span>Aspect Ratio</span>
-                    <span className="text-[#c49b66] font-mono">{imageStep.presets.aspectRatio || "16:9"}</span>
-                  </label>
-                  <div className="grid grid-cols-3 gap-1 bg-[#060c15] p-1 rounded-lg border border-[#16273a]">
-                    {["16:9", "1:1", "9:16"].map(ratio => (
+                {/* Specific Prompt Input & Alignment Control */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[8px] font-black uppercase tracking-wider text-slate-400">
+                      Concept Prompt
+                    </label>
+                    {onHarmonizePrompts && (
                       <button
-                        key={ratio}
-                        onClick={() => onUpdateStepPreset(imageStep.stepNumber, "aspectRatio", ratio)}
-                        className={`py-1 text-[8px] font-mono font-bold rounded cursor-pointer transition-all ${
-                          (imageStep.presets.aspectRatio || "16:9") === ratio 
-                            ? "bg-[#c49b66] text-[#060c15]" 
-                            : "text-slate-400 hover:text-white"
-                        }`}
+                        onClick={() => onHarmonizePrompts(imageStep.stepNumber, imageStep.prompt)}
+                        title="Harmonize and align all downstream node prompts to this concept"
+                        className="text-[8px] font-bold text-[#c49b66] hover:text-white flex items-center gap-1 bg-[#c49b66]/10 hover:bg-[#c49b66]/20 px-1.5 py-0.5 rounded cursor-pointer transition-colors border border-[#c49b66]/30"
                       >
-                        {ratio}
+                        <Sparkles size={9} />
+                        <span>Align Flow</span>
                       </button>
-                    ))}
+                    )}
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={imageStep.prompt}
+                    onChange={(e) => onUpdateStepPrompt?.(imageStep.stepNumber, e.target.value)}
+                    placeholder="Enter image prompt..."
+                    className="w-full bg-[#060c15] border border-[#16273a] focus:border-[#c49b66] rounded-lg p-2 text-[10px] text-slate-200 resize-none font-sans outline-none transition-colors"
+                  />
+                </div>
+
+                {/* Live Knob Controls */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                      <span>Aspect Ratio</span>
+                      <span className="text-[#c49b66] font-mono">{imageStep.presets.aspectRatio || "16:9"}</span>
+                    </label>
+                    <div className="grid grid-cols-3 gap-0.5 bg-[#060c15] p-1 rounded-lg border border-[#16273a]">
+                      {["16:9", "1:1", "9:16"].map(ratio => (
+                        <button
+                          key={ratio}
+                          onClick={() => onUpdateStepPreset(imageStep.stepNumber, "aspectRatio", ratio)}
+                          className={`py-1 text-[8px] font-mono font-bold rounded cursor-pointer transition-all ${
+                            (imageStep.presets.aspectRatio || "16:9") === ratio 
+                              ? "bg-[#c49b66] text-[#060c15]" 
+                              : "text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          {ratio}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                      <span>Creative Angle</span>
+                      <span className="text-[#c49b66] font-mono text-[7px] truncate max-w-[60px]">
+                        {imageStep.presets.style || "Auto Box"}
+                      </span>
+                    </label>
+                    <select
+                      value={imageStep.presets.style || "auto"}
+                      onChange={(e) => onUpdateStepPreset(imageStep.stepNumber, "style", e.target.value)}
+                      className="w-full bg-[#060c15] border border-[#16273a] text-slate-200 text-[9px] rounded-lg p-1 font-mono outline-none cursor-pointer focus:border-[#c49b66]"
+                    >
+                      <option value="auto">🎲 Auto Outside-Box</option>
+                      <option value="Anamorphic Cinema">🎬 Anamorphic Cinema</option>
+                      <option value="Cyberpunk Neon Volumetric">🌆 Cyberpunk Neon</option>
+                      <option value="Isometric 3D Blueprint">📐 Isometric 3D</option>
+                      <option value="Impasto Oil Fine Art">🎨 Impasto Fine Art</option>
+                      <option value="Macro Action Close-Up">🔍 Macro Close-Up</option>
+                      <option value="Retro 80s Synthwave">🌆 80s Synthwave</option>
+                      <option value="Sci-Fi Cosmic Horizon">🌌 Sci-Fi Cosmic</option>
+                      <option value="Minimalist Dark Noir">🖤 Minimalist Noir</option>
+                    </select>
                   </div>
                 </div>
 
                 {/* Visual Preview Box */}
-                <div className="h-28 w-full rounded-xl bg-[#060c15] border border-[#16273a] flex items-center justify-center overflow-hidden relative">
+                <div className="h-28 w-full rounded-xl bg-[#060c15] border border-[#16273a] flex items-center justify-center overflow-hidden relative group">
                   {isStepRunning(imageStep.stepNumber) ? (
                     <div className="text-center space-y-1.5 animate-pulse">
                       <Layers className="text-[#c49b66] mx-auto animate-spin" size={20} />
                       <span className="text-[8px] font-mono text-slate-400">Rendering Latents...</span>
                     </div>
                   ) : stepOutputs[imageStep.stepNumber]?.outputUrl ? (
-                    <img 
-                      src={stepOutputs[imageStep.stepNumber].outputUrl} 
-                      alt="Synthesized Frame" 
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                      onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = getFallbackVideoFrame(imageStep.prompt);
-                      }}
-                    />
+                    <>
+                      <img 
+                        src={stepOutputs[imageStep.stepNumber].outputUrl} 
+                        alt="Synthesized Frame" 
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = getFallbackVideoFrame(imageStep.prompt);
+                        }}
+                      />
+                      {stepOutputs[imageStep.stepNumber]?.styleName && (
+                        <div className="absolute top-1 left-1 bg-black/80 backdrop-blur-md px-1.5 py-0.5 rounded border border-[#c49b66]/30 text-[7px] font-mono text-[#c49b66] flex items-center gap-1">
+                          <Sparkles size={7} />
+                          <span>Var #{stepOutputs[imageStep.stepNumber]?.variantIndex || 1} • {stepOutputs[imageStep.stepNumber]?.styleName}</span>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <div className="text-center text-slate-600">
                       <ImageIcon size={20} className="mx-auto mb-1 opacity-50" />
@@ -428,8 +522,8 @@ export default function VisualChainingCanvas({
                     "Rendering..."
                   ) : getNodeStatus(imageStep.stepNumber) === "completed" ? (
                     <>
-                      <Check size={10} />
-                      <span>Re-Render Frame</span>
+                      <Sparkles size={10} className="text-[#c49b66]" />
+                      <span>Re-Render Frame (New Angle)</span>
                     </>
                   ) : (
                     <>
@@ -477,6 +571,20 @@ export default function VisualChainingCanvas({
                   }`}>
                     {getNodeStatus(audioStep.stepNumber)}
                   </span>
+                </div>
+
+                {/* Specific Prompt Input */}
+                <div className="space-y-1">
+                  <label className="text-[8px] font-black uppercase tracking-wider text-slate-400">
+                    Voice Narration Prompt
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={audioStep.prompt}
+                    onChange={(e) => onUpdateStepPrompt?.(audioStep.stepNumber, e.target.value)}
+                    placeholder="Enter speech text..."
+                    className="w-full bg-[#060c15] border border-[#16273a] focus:border-[#7ae7c7] rounded-lg p-2 text-[10px] text-slate-200 resize-none font-sans outline-none transition-colors"
+                  />
                 </div>
 
                 {/* Live Knob Controls */}
@@ -598,6 +706,28 @@ export default function VisualChainingCanvas({
                   </span>
                 </div>
 
+                {/* Specific Motion Prompt & Alignment Indicator */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[8px] font-black uppercase tracking-wider text-slate-400">
+                      Motion Script Prompt
+                    </label>
+                    {stepOutputs[1]?.outputUrl && (
+                      <span className="text-[8px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded flex items-center gap-1 border border-emerald-500/20">
+                        <CheckCircle2 size={8} />
+                        <span>Synced to Frame 1</span>
+                      </span>
+                    )}
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={videoStep.prompt}
+                    onChange={(e) => onUpdateStepPrompt?.(videoStep.stepNumber, e.target.value)}
+                    placeholder="Enter motion prompt..."
+                    className="w-full bg-[#060c15] border border-[#16273a] focus:border-amber-500 rounded-lg p-2 text-[10px] text-slate-200 resize-none font-sans outline-none transition-colors"
+                  />
+                </div>
+
                 {/* Live Knob Controls */}
                 <div className="space-y-1.5">
                   <label className="text-[8px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
@@ -630,7 +760,8 @@ export default function VisualChainingCanvas({
                         isOpen: true,
                         title: "NVIDIA VideoGPT Dynamic Motion",
                         prompt: videoStep.prompt,
-                        imageUrl: url
+                        imageUrl: url,
+                        audioUrl: stepOutputs[3]?.outputUrl
                       });
                     }
                   }}
@@ -795,6 +926,107 @@ export default function VisualChainingCanvas({
             )}
           </div>
 
+          {/* ==================================================== */}
+          {/* STAGE 5: MASTER UNIFIED PRODUCTION NODE             */}
+          {/* ==================================================== */}
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2 text-[10px] uppercase font-black tracking-widest text-[#c49b66]">
+              <span className="w-5 h-5 rounded-full bg-[#c49b66] text-[#060c15] flex items-center justify-center font-mono font-black">5</span>
+              <span>Master Orchestration</span>
+            </div>
+
+            {masterStep && (
+              <div className={`bg-gradient-to-b from-[#0b1622] to-[#121f2d] border-2 transition-all rounded-2xl p-5 space-y-4 shadow-xl relative ${
+                isStepRunning(masterStep.stepNumber) 
+                  ? "border-[#c49b66] shadow-[#c49b66]/30" 
+                  : getNodeStatus(masterStep.stepNumber) === "completed"
+                  ? "border-[#c49b66]"
+                  : "border-[#16273a] hover:border-[#c49b66]/50"
+              }`}>
+                {/* Input anchor */}
+                <div className="hidden lg:flex absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-[#060c15] border-2 border-[#c49b66] items-center justify-center">
+                  <div className="w-2 h-2 rounded-full bg-[#c49b66]"></div>
+                </div>
+
+                <div className="flex items-center justify-between border-b border-[#16273a] pb-3">
+                  <div className="flex items-center space-x-2">
+                    <div className="p-1.5 rounded-lg bg-[#c49b66]/20 text-[#c49b66]">
+                      <Sparkles size={15} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-white font-display italic">Master Production</h4>
+                      <span className="text-[9px] font-mono text-[#c49b66]">Omniverse Orchestrator</span>
+                    </div>
+                  </div>
+                  <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                    isStepRunning(masterStep.stepNumber) ? "bg-[#c49b66]/20 text-[#c49b66] animate-pulse" :
+                    getNodeStatus(masterStep.stepNumber) === "completed" ? "bg-emerald-500/10 text-emerald-400" :
+                    "bg-slate-800 text-slate-400"
+                  }`}>
+                    {getNodeStatus(masterStep.stepNumber)}
+                  </span>
+                </div>
+
+                <div className="p-3 bg-[#060c15] border border-[#16273a] rounded-xl space-y-2">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-[#c49b66] block">
+                    Synthesizes All Pipeline Data
+                  </span>
+                  <div className="text-[9px] text-slate-300 space-y-1 font-mono">
+                    <div className="flex items-center space-x-1.5">
+                      <span className={getNodeStatus(1) === "completed" ? "text-emerald-400" : "text-slate-600"}>●</span>
+                      <span>SDXL High-Res Art</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <span className={getNodeStatus(2) === "completed" ? "text-emerald-400" : "text-slate-600"}>●</span>
+                      <span>VideoGPT Motion Loop</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <span className={getNodeStatus(3) === "completed" ? "text-emerald-400" : "text-slate-600"}>●</span>
+                      <span>NeMo Speech Narration</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <span className={getNodeStatus(4) === "completed" ? "text-emerald-400" : "text-slate-600"}>●</span>
+                      <span>Nemotron Code App</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Launch Unified Production Modal button */}
+                <button
+                  onClick={() => {
+                    setMasterModalData({
+                      isOpen: true,
+                      title: "Omniverse Master Unified Production",
+                      prompt: masterStep.prompt,
+                      imageUrl: stepOutputs[1]?.outputUrl,
+                      audioUrl: stepOutputs[3]?.outputUrl
+                    });
+                  }}
+                  className="w-full py-2.5 bg-gradient-to-r from-[#c49b66] to-[#a47e4f] hover:opacity-95 text-[#060c15] text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-[#c49b66]/20"
+                >
+                  <Sparkles size={12} />
+                  <span>Launch Master Suite</span>
+                </button>
+
+                {/* Execute Button */}
+                <button
+                  onClick={() => onRunStep(masterStep)}
+                  disabled={isStepRunning(masterStep.stepNumber) || isRunningAll}
+                  className="w-full py-2 bg-[#060c15] hover:bg-[#16273a] border border-[#16273a] text-slate-300 text-[9px] uppercase tracking-widest font-black rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isStepRunning(masterStep.stepNumber) ? (
+                    "Synthesizing Master Suite..."
+                  ) : (
+                    <>
+                      <RotateCcw size={10} />
+                      <span>Re-Compile Step 5</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
 
@@ -805,6 +1037,17 @@ export default function VisualChainingCanvas({
         title={videoModalData.title}
         prompt={videoModalData.prompt}
         imageUrl={videoModalData.imageUrl}
+        audioUrl={videoModalData.audioUrl}
+      />
+
+      {/* Master Unified Production Modal */}
+      <MasterUnifiedModal
+        isOpen={masterModalData.isOpen}
+        onClose={() => setMasterModalData(prev => ({ ...prev, isOpen: false }))}
+        title={masterModalData.title}
+        prompt={masterModalData.prompt}
+        imageUrl={masterModalData.imageUrl}
+        audioUrl={masterModalData.audioUrl}
       />
     </div>
   );

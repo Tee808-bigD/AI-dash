@@ -22,6 +22,7 @@ export interface VideoPlayerModalProps {
   title: string;
   prompt: string;
   imageUrl: string;
+  audioUrl?: string;
   durationSeconds?: number;
   narration?: string;
   aspectRatio?: "16:9" | "9:16" | "1:1";
@@ -39,6 +40,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   title,
   prompt,
   imageUrl,
+  audioUrl,
   durationSeconds = 6,
   narration,
   aspectRatio = "16:9",
@@ -71,7 +73,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 
   // AI Voiceover Audio player & fallback speech synthesis
   useEffect(() => {
-    if (!isOpen || isMuted) {
+    if (!isOpen || isMuted || isDownloading) {
       if (audioRef.current) {
         audioRef.current.pause();
       }
@@ -79,6 +81,17 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         window.speechSynthesis.cancel();
       }
       return;
+    }
+
+    if (audioUrl) {
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      if (isPlaying) {
+        audio.play().catch(() => {});
+      }
+      return () => {
+        if (audioRef.current) audioRef.current.pause();
+      };
     }
 
     const activeScene = activeScenes[activeSceneIdx] || activeScenes[0];
@@ -303,8 +316,9 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         title,
         prompt,
         imageUrl,
+        audioUrl,
         durationSeconds,
-        aspectRatio,
+        aspectRatio: (aspectRatio === "9:16" || aspectRatio === "1:1") ? aspectRatio : "16:9",
         narration,
         scenes,
         onProgress: (pct, status) => {

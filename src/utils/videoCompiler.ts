@@ -7,6 +7,7 @@ export interface VideoCompileOptions {
   durationSeconds?: number;
   aspectRatio?: "16:9" | "9:16" | "1:1";
   narration?: string;
+  audioUrl?: string;
   scenes?: Array<{
     imageUrl?: string;
     textOverlay?: string;
@@ -16,7 +17,38 @@ export interface VideoCompileOptions {
   onProgress?: (progressPct: number, statusText: string) => void;
 }
 
-// Helper to synthesize atmospheric cinematic background pad
+// Helper to decode and attach an explicit audio URL to Web Audio stream destination
+async function attachAudioUrlToDestination(
+  audioCtx: AudioContext,
+  destination: MediaStreamAudioDestinationNode,
+  audioUrl: string,
+  delaySec: number = 0
+): Promise<boolean> {
+  if (!audioUrl || !audioUrl.trim()) return false;
+  try {
+    const res = await fetch(audioUrl);
+    if (!res.ok) return false;
+    const arrayBuffer = await res.arrayBuffer();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+    const source = audioCtx.createBufferSource();
+    source.buffer = audioBuffer;
+
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(1.0, audioCtx.currentTime);
+
+    source.connect(gain);
+    gain.connect(destination);
+
+    source.start(audioCtx.currentTime + delaySec);
+    return true;
+  } catch (err) {
+    console.warn("Could not attach explicit audioUrl to stream destination:", err);
+    return false;
+  }
+}
+
+// Helper to synthesize atmospheric cinematic background pad (used only as fallback if no audio/narration exists)
 function addAmbientSoundtrack(audioCtx: AudioContext, destination: MediaStreamAudioDestinationNode, durationSec: number) {
   const freqs = [130.81, 164.81, 196.00, 261.63]; // C3, E3, G3, C4
   freqs.forEach((freq, idx) => {
@@ -168,15 +200,31 @@ export async function downloadCompiledVideo(options: VideoCompileOptions): Promi
   const fps = 30;
   const totalDurationSec = activeScenes.reduce((acc, s) => acc + (s.duration || durationSeconds), 0);
 
-  // 1. Add background ambient music track
-  addAmbientSoundtrack(audioCtx, audioDest, totalDurationSec);
+  // --- UNIFIED AUDIO COMPILATION ---
+  // Ensure that ONE AND ONLY ONE clean audio source is embedded into the video stream, preventing collisions or overlapping dual-audio.
+  let hasUnifiedAudio = false;
 
-  // 2. Attach voice narrations for all scenes
-  let timeOffset = 0.2;
-  for (const scene of activeScenes) {
-    const speechText = scene.narration || narration || prompt;
-    await attachVoiceToDestination(audioCtx, audioDest, speechText, timeOffset);
-    timeOffset += (scene.duration || durationSeconds);
+  // 1. If explicit generated audioUrl is provided, decode and attach that single audio file
+  if (options.audioUrl) {
+    hasUnifiedAudio = await attachAudioUrlToDestination(audioCtx, audioDest, options.audioUrl, 0);
+  }
+
+  // 2. If no explicit audioUrl was provided, attach single generated voice narration for scenes
+  if (!hasUnifiedAudio) {
+    let timeOffset = 0.2;
+    for (const scene of activeScenes) {
+      const speechText = scene.narration || narration || prompt;
+      if (speechText) {
+        await attachVoiceToDestination(audioCtx, audioDest, speechText, timeOffset);
+        hasUnifiedAudio = true;
+      }
+      timeOffset += (scene.duration || durationSeconds);
+    }
+  }
+
+  // 3. Fallback synth tone only if zero audio tracks were attached
+  if (!hasUnifiedAudio) {
+    addAmbientSoundtrack(audioCtx, audioDest, totalDurationSec);
   }
 
   if (onProgress) onProgress(35, "Initializing MediaRecorder video + audio stream...");

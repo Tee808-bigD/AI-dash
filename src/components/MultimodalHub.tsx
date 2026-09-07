@@ -36,10 +36,11 @@ import PromptOptimizerModal from "./PromptOptimizerModal";
 import MediaAssetBin from "./MediaAssetBin";
 import { getFallbackVideoFrame } from "../utils/fallbackImage";
 import { VideoPlayerModal } from "./video/VideoPlayerModal";
+import { MasterUnifiedModal } from "./MasterUnifiedModal";
 
 export interface SuggestedStep {
   stepNumber: number;
-  type: "image" | "video" | "audio" | "code";
+  type: "image" | "video" | "audio" | "code" | "master";
   modelName: string;
   modelId: string;
   prompt: string;
@@ -62,9 +63,9 @@ export interface ClassificationResult {
 }
 
 const DEFAULT_INITIAL_PIPELINE: ClassificationResult = {
-  originalPrompt: "Generate a futuristic hovercraft image, then compile a cinematic video showing its propulsion, and translate the engineering audio summary.",
-  intentsDetected: ["image_synthesis", "temporal_motion", "nemo_speech", "code_bundling"],
-  estimatedTotalCredits: 12,
+  originalPrompt: "Generate a futuristic hovercraft image, then compile a cinematic video showing its propulsion, translate the engineering audio summary, and build an interactive telemetry dashboard.",
+  intentsDetected: ["image_synthesis", "temporal_motion", "nemo_speech", "code_bundling", "master_synthesis"],
+  estimatedTotalCredits: 16,
   suggestedSteps: [
     {
       stepNumber: 1,
@@ -109,6 +110,17 @@ const DEFAULT_INITIAL_PIPELINE: ClassificationResult = {
       presets: {
         aspectRatio: "16:9"
       }
+    },
+    {
+      stepNumber: 5,
+      type: "master",
+      modelName: "Omniverse Master Orchestrator",
+      modelId: "omniverse-master-nim",
+      prompt: "Unified Production: Integrate SDXL Art, VideoGPT Motion, NeMo Voiceover & Nemotron HUD into one cohesive interactive master suite.",
+      presets: {
+        resolution: "4K Master",
+        audioSync: "Synchronized"
+      }
     }
   ]
 };
@@ -129,11 +141,13 @@ export default function MultimodalHub() {
     title: string;
     prompt: string;
     imageUrl: string;
+    audioUrl?: string;
   }>({
     isOpen: false,
     title: "",
     prompt: "",
-    imageUrl: ""
+    imageUrl: "",
+    audioUrl: ""
   });
   
   // Prompt Optimizer Modal State
@@ -171,11 +185,30 @@ export default function MultimodalHub() {
     textResult?: string;
     latencyMs?: number;
     error?: string;
+    styleName?: string;
+    variantIndex?: number;
+    provider?: string;
+    seed?: number;
   }>>({
     1: { status: "idle" },
     2: { status: "idle" },
     3: { status: "idle" },
-    4: { status: "idle" }
+    4: { status: "idle" },
+    5: { status: "idle" }
+  });
+
+  // Master Unified Modal State
+  const [masterModalData, setMasterModalData] = useState<{
+    isOpen: boolean;
+    title: string;
+    prompt: string;
+    imageUrl?: string;
+    audioUrl?: string;
+    codeResult?: string;
+  }>({
+    isOpen: false,
+    title: "",
+    prompt: ""
   });
 
   // Rapid Prototyping Code State
@@ -195,6 +228,39 @@ export default function MultimodalHub() {
     { name: "Coastal Fog", value: "#b8c6c3" },
     { name: "Coral Pearl", value: "#f07c6c" }
   ];
+
+  const handleUpdateStepPrompt = (stepNumber: number, newPrompt: string) => {
+    setPipeline(prev => ({
+      ...prev,
+      suggestedSteps: prev.suggestedSteps.map(step => 
+        step.stepNumber === stepNumber ? { ...step, prompt: newPrompt } : step
+      )
+    }));
+  };
+
+  const handleHarmonizePrompts = async (triggerStepNumber: number, basePrompt: string) => {
+    try {
+      const res = await fetch("/api/multimodal/align-prompts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ basePrompt, triggerStepNumber })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.alignedPrompts) {
+          setPipeline(prev => ({
+            ...prev,
+            suggestedSteps: prev.suggestedSteps.map(step => {
+              const aligned = data.alignedPrompts[step.stepNumber] || data.alignedPrompts[String(step.stepNumber)];
+              return aligned ? { ...step, prompt: aligned } : step;
+            })
+          }));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to harmonize prompts:", err);
+    }
+  };
 
   const handleDeconstructPipeline = async () => {
     if (!pipelinePrompt.trim()) return;
@@ -225,6 +291,9 @@ export default function MultimodalHub() {
     }
   };
 
+  // Step Regeneration Tracker
+  const [regenCounts, setRegenCounts] = useState<Record<number, number>>({});
+
   const handleRunStep = async (step: SuggestedStep) => {
     setRunningStepIdx(step.stepNumber);
     setStepOutputs(prev => ({
@@ -237,12 +306,20 @@ export default function MultimodalHub() {
     try {
       // Route request based on step type
       if (step.type === "image") {
+        const nextRegenCount = (regenCounts[step.stepNumber] || 0) + 1;
+        setRegenCounts(prev => ({ ...prev, [step.stepNumber]: nextRegenCount }));
+        const seed = Math.floor(Math.random() * 900000) + (nextRegenCount * 888);
+
         const response = await fetch("/api/video/generate-frame", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
             prompt: step.prompt, 
-            aspectRatio: step.presets.aspectRatio || "16:9" 
+            aspectRatio: step.presets.aspectRatio || "16:9",
+            style: step.presets.style || "auto",
+            seed,
+            regenerateCount: nextRegenCount,
+            thinkOutsideTheBox: true
           })
         });
         const data = await response.json();
@@ -254,21 +331,28 @@ export default function MultimodalHub() {
             [step.stepNumber]: {
               status: "completed",
               outputUrl: data.imageUrl,
-              latencyMs: latency
+              latencyMs: latency,
+              textResult: `**Variant #${data.regenerateCount || nextRegenCount}** • Style: *${data.styleName || "Creative Angle"}*\nEngine: \`${data.provider || "AI Generation Engine"}\``,
+              provider: data.provider,
+              styleName: data.styleName,
+              variantIndex: data.regenerateCount || nextRegenCount,
+              seed: data.seed
             }
           }));
         } else {
           throw new Error(data.error || "Frame synthesis failed.");
         }
       } else if (step.type === "video") {
-        // Build video storyboard preview using server script
+        // Build video storyboard preview using server script, passing Step 1 image reference for visual alignment
+        const step1ImageUrl = stepOutputs[1]?.outputUrl;
         const response = await fetch("/api/video/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
             prompt: step.prompt, 
             style: step.presets.style || "cinematic",
-            aspectRatio: step.presets.aspectRatio || "16:9"
+            aspectRatio: step.presets.aspectRatio || "16:9",
+            images: step1ImageUrl ? [step1ImageUrl] : []
           })
         });
         const data = await response.json();
@@ -339,6 +423,21 @@ export default function MultimodalHub() {
         } else {
           throw new Error(data.error || "Website generation failed.");
         }
+      } else if (step.type === "master") {
+        await new Promise(resolve => setTimeout(resolve, 800));
+        const latency = Date.now() - startTime;
+        const imgUrl = stepOutputs[1]?.outputUrl || getFallbackVideoFrame(step.prompt);
+        const audioUrl = stepOutputs[3]?.outputUrl;
+        
+        setStepOutputs(prev => ({
+          ...prev,
+          [step.stepNumber]: {
+            status: "completed",
+            outputUrl: imgUrl,
+            textResult: `**Master Unified Suite Compiled**: Integrated Step 1 Art, Step 2 Motion, Step 3 Voiceover, and Step 4 Code App into Step 5 Master Production.`,
+            latencyMs: latency
+          }
+        }));
       }
     } catch (err: any) {
       setStepOutputs(prev => ({
@@ -657,12 +756,14 @@ export default function MultimodalHub() {
                   onRunEntirePipeline={handleRunEntirePipeline}
                   onResetPipeline={handleResetPipeline}
                   onUpdateStepPreset={handleUpdateStepPreset}
+                  onUpdateStepPrompt={handleUpdateStepPrompt}
+                  onHarmonizePrompts={handleHarmonizePrompts}
                   onAddCustomNode={handleAddCustomNode}
                   onExportCode={handleOpenPipelineExport}
                   onOpenProtoStudio={() => setActiveSubTab("prototyping")}
                 />
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
                   {pipeline.suggestedSteps.map((step) => {
                     const output = stepOutputs[step.stepNumber];
                     const isRunning = runningStepIdx === step.stepNumber;
@@ -670,11 +771,14 @@ export default function MultimodalHub() {
                     const isVideo = step.type === "video";
                     const isAudio = step.type === "audio";
                     const isCode = step.type === "code";
+                    const isMaster = step.type === "master";
 
                     return (
                       <div 
                         key={step.stepNumber}
-                        className="bg-[#0b1622]/90 border border-[#16273a] rounded-2xl p-4.5 flex flex-col justify-between space-y-4 shadow-xl"
+                        className={`bg-[#0b1622]/90 border rounded-2xl p-4.5 flex flex-col justify-between space-y-4 shadow-xl ${
+                          isMaster ? "border-[#c49b66]/60 bg-gradient-to-b from-[#0b1622] to-[#121e2d]" : "border-[#16273a]"
+                        }`}
                       >
                         {/* Step Header */}
                         <div className="space-y-1.5">
@@ -686,7 +790,8 @@ export default function MultimodalHub() {
                               isImage ? "bg-[#c49b66]/10 text-[#c49b66] border-[#c49b66]/20" :
                               isVideo ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
                               isAudio ? "bg-[#7ae7c7]/10 text-[#7ae7c7] border-[#7ae7c7]/20" :
-                              "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                              isCode ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
+                              "bg-[#c49b66]/20 text-[#c49b66] border-[#c49b66]/40 animate-pulse"
                             }`}>
                               {step.type}
                             </span>
@@ -760,6 +865,27 @@ export default function MultimodalHub() {
                                   <span className="text-[10px] text-slate-300 font-bold block">Prototype Compiled</span>
                                 </div>
                               )}
+                              {isMaster && (
+                                <div className="space-y-2.5 text-center p-2 w-full">
+                                  <Sparkles className="text-[#c49b66] mx-auto animate-bounce" size={26} />
+                                  <span className="text-[10px] text-white font-extrabold block">Master Production Ready</span>
+                                  <button
+                                    onClick={() => {
+                                      setMasterModalData({
+                                        isOpen: true,
+                                        title: step.modelName,
+                                        prompt: step.prompt,
+                                        imageUrl: stepOutputs[1]?.outputUrl,
+                                        audioUrl: stepOutputs[3]?.outputUrl
+                                      });
+                                    }}
+                                    className="w-full py-1.5 bg-[#c49b66] hover:bg-[#a47e4f] text-[#060c15] text-[9px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                  >
+                                    <Sparkles size={11} />
+                                    <span>Launch Master Production</span>
+                                  </button>
+                                </div>
+                              )}
                               
                               {/* Latency badge */}
                               <div className="absolute bottom-1.5 left-1.5 bg-[#0b1622]/90 border border-[#16273a] rounded-lg px-2 py-0.5 text-[8px] font-mono font-bold text-[#7ae7c7]">
@@ -777,6 +903,7 @@ export default function MultimodalHub() {
                               {isVideo && <Film size={20} className="mb-1" />}
                               {isAudio && <Volume2 size={20} className="mb-1" />}
                               {isCode && <Code size={20} className="mb-1" />}
+                              {isMaster && <Sparkles size={20} className="mb-1 text-[#c49b66]" />}
                               <span className="text-[9px] font-bold uppercase tracking-widest">Idle Chain Step</span>
                             </div>
                           )}
@@ -1062,6 +1189,17 @@ export default function MultimodalHub() {
         title={videoModalData.title}
         prompt={videoModalData.prompt}
         imageUrl={videoModalData.imageUrl}
+        audioUrl={videoModalData.audioUrl}
+      />
+
+      {/* Step 5 Master Unified Production Modal */}
+      <MasterUnifiedModal
+        isOpen={masterModalData.isOpen}
+        onClose={() => setMasterModalData(prev => ({ ...prev, isOpen: false }))}
+        title={masterModalData.title}
+        prompt={masterModalData.prompt}
+        imageUrl={masterModalData.imageUrl}
+        audioUrl={masterModalData.audioUrl}
       />
     </div>
   );

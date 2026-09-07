@@ -617,43 +617,67 @@ async function scrapeWebpageText(url: string): Promise<string> {
   }
 }
 
-function generateVideoFrameSvgServer(title: string, subtitle?: string, sceneNum?: number): string {
+// Helper: Fetch real AI images from Pollinations.ai FLUX image generation API
+async function fetchPollinationsAiImage(prompt: string, seed: number, width = 1280, height = 720): Promise<string> {
+  const cleanPrompt = prompt.substring(0, 400);
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?seed=${seed}&width=${width}&height=${height}&nologo=true&enhance=true&model=flux`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6500);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error(`Pollinations HTTP ${res.status}`);
+    const arrayBuf = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuf);
+    if (buffer.length < 500) throw new Error("Image buffer too small");
+    return `data:image/jpeg;base64,${buffer.toString("base64")}`;
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
+}
+
+function generateVideoFrameSvgServer(title: string, subtitle?: string, sceneNum?: number, seed = 1, styleName = "Cinematic"): string {
   const safeTitle = (title || "NVIDIA VideoGPT Frame").replace(/[<>&'"]/g, "").substring(0, 45);
   const safeSubtitle = (subtitle || "Dynamic Motion Interpolation").replace(/[<>&'"]/g, "").substring(0, 50);
-  const numStr = sceneNum ? `SCENE 0${sceneNum}` : "NVIDIA VIDEOGPT";
+  const numStr = sceneNum ? `SCENE 0${sceneNum}` : `VARIANT #${((seed || 1) % 9) + 1}`;
 
   const colors = [
     { bg1: "#0f172a", bg2: "#311042", accent1: "#a855f7", accent2: "#ec4899" },
     { bg1: "#030712", bg2: "#0f2e3d", accent1: "#06b6d4", accent2: "#3b82f6" },
     { bg1: "#111827", bg2: "#1f2937", accent1: "#10b981", accent2: "#06b6d4" },
     { bg1: "#18181b", bg2: "#3f3f46", accent1: "#f59e0b", accent2: "#ef4444" },
-    { bg1: "#09090b", bg2: "#27272a", accent1: "#6366f1", accent2: "#a855f7" }
+    { bg1: "#09090b", bg2: "#27272a", accent1: "#6366f1", accent2: "#a855f7" },
+    { bg1: "#0f051d", bg2: "#2a085c", accent1: "#d946ef", accent2: "#06b6d4" },
+    { bg1: "#1a0b00", bg2: "#4a2000", accent1: "#f97316", accent2: "#eab308" }
   ];
-  const c = colors[(sceneNum || 1) % colors.length];
+  const c = colors[((seed || 1) + (sceneNum || 0)) % colors.length];
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450">
     <defs>
-      <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <linearGradient id="bgGrad_${seed}" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stop-color="${c.bg1}"/>
         <stop offset="100%" stop-color="${c.bg2}"/>
       </linearGradient>
-      <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <linearGradient id="lineGrad_${seed}" x1="0%" y1="0%" x2="100%" y2="0%">
         <stop offset="0%" stop-color="${c.accent1}"/>
         <stop offset="100%" stop-color="${c.accent2}"/>
       </linearGradient>
     </defs>
-    <rect width="800" height="450" fill="url(#bgGrad)"/>
-    <circle cx="400" cy="200" r="220" fill="${c.accent1}" opacity="0.12" filter="blur(50px)"/>
-    <path d="M-100,350 Q200,150 400,280 T900,100" stroke="url(#lineGrad)" stroke-width="3" fill="none" opacity="0.5"/>
-    <path d="M-100,100 Q300,400 600,200 T1000,350" stroke="url(#lineGrad)" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.3"/>
+    <rect width="800" height="450" fill="url(#bgGrad_${seed})"/>
+    <circle cx="400" cy="200" r="240" fill="${c.accent1}" opacity="0.15" filter="blur(60px)"/>
+    <circle cx="600" cy="100" r="150" fill="${c.accent2}" opacity="0.12" filter="blur(50px)"/>
+    <path d="M-100,350 Q200,150 400,280 T900,100" stroke="url(#lineGrad_${seed})" stroke-width="3" fill="none" opacity="0.5"/>
+    <path d="M-100,100 Q300,400 600,200 T1000,350" stroke="url(#lineGrad_${seed})" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.3"/>
     <rect x="40" y="40" width="720" height="370" rx="12" fill="none" stroke="${c.accent1}" stroke-width="1" stroke-dasharray="4 4" opacity="0.3"/>
-    <rect x="60" y="60" width="150" height="26" rx="6" fill="#000000" opacity="0.6"/>
-    <text x="135" y="77" font-family="monospace" font-size="10" font-weight="bold" fill="${c.accent1}" text-anchor="middle">${numStr} • 60 FPS</text>
-    <rect x="200" y="140" width="400" height="170" rx="16" fill="#090d16" stroke="url(#lineGrad)" stroke-width="1.5" opacity="0.95"/>
-    <circle cx="400" cy="200" r="26" fill="${c.accent1}" opacity="0.9"/>
-    <polygon points="393,189 415,200 393,211" fill="#ffffff"/>
-    <text x="400" y="258" font-family="system-ui, sans-serif" font-size="15" font-weight="800" fill="#f8fafc" text-anchor="middle">${safeTitle}</text>
-    <text x="400" y="280" font-family="system-ui, sans-serif" font-size="11" font-weight="500" fill="#94a3b8" text-anchor="middle">${safeSubtitle}</text>
+    <rect x="60" y="60" width="230" height="26" rx="6" fill="#000000" opacity="0.75"/>
+    <text x="175" y="77" font-family="monospace" font-size="10" font-weight="bold" fill="${c.accent1}" text-anchor="middle">${numStr} • ${styleName.toUpperCase()}</text>
+    <rect x="180" y="130" width="440" height="190" rx="16" fill="#090d16" stroke="url(#lineGrad_${seed})" stroke-width="1.5" opacity="0.95"/>
+    <circle cx="400" cy="195" r="28" fill="${c.accent1}" opacity="0.9"/>
+    <polygon points="393,184 415,195 393,206" fill="#ffffff"/>
+    <text x="400" y="255" font-family="system-ui, sans-serif" font-size="15" font-weight="800" fill="#f8fafc" text-anchor="middle">${safeTitle}</text>
+    <text x="400" y="278" font-family="system-ui, sans-serif" font-size="11" font-weight="500" fill="#94a3b8" text-anchor="middle">${safeSubtitle}</text>
+    <text x="400" y="298" font-family="monospace" font-size="9" fill="${c.accent2}" text-anchor="middle">SEED: ${seed} • OUTSIDE-THE-BOX VARIATION</text>
   </svg>`;
 
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
@@ -676,7 +700,7 @@ app.post("/api/video/generate", async (req, res) => {
 
   if (!ai) {
     // Return high-quality, dynamically themed mockup data if the Gemini Client isn't initialized
-    const mockResult = getMockVideoScript(prompt, parsedUrlContent);
+    const mockResult = getMockVideoScript(prompt, parsedUrlContent, images);
     return res.json({
       ...mockResult,
       isSimulated: true,
@@ -772,7 +796,10 @@ Aspect Ratio: ${aspectRatio || "9:16"} (Short-form portrait)`;
         const uniqueTags = Array.from(new Set(words)).slice(0, 3);
         const queryTerm = uniqueTags.length > 0 ? uniqueTags.join(",") : "technology,abstract";
         
-        const imageUrl = generateVideoFrameSvgServer(scene.textOverlay || scene.visualDescription || "Scene Keyframe", scene.narration, idx + 1);
+        let imageUrl = generateVideoFrameSvgServer(scene.textOverlay || scene.visualDescription || "Scene Keyframe", scene.narration, idx + 1);
+        if (idx === 0 && images && Array.isArray(images) && images.length > 0 && images[0]) {
+          imageUrl = images[0];
+        }
         return {
           ...scene,
           imageUrl
@@ -1025,73 +1052,133 @@ app.post("/api/video/generate-voice", async (req, res) => {
   }
 });
 
-// 5c. AI Video Scene Frame Generator Endpoint (Supports fallback beautifully with dynamic cinematography)
+// 5c. AI Video Scene Frame Generator Endpoint (Supports multi-tier image generation with creative style mutations)
 app.post("/api/video/generate-frame", async (req, res) => {
-  const { prompt, aspectRatio, motionStyle, style } = req.body;
-  if (!prompt) {
+  const { prompt, aspectRatio, motionStyle, style, seed: inputSeed, regenerateCount: inputRegenCount } = req.body;
+  if (!prompt || typeof prompt !== "string") {
     return res.status(400).json({ error: "Prompt is required to generate frame." });
   }
 
   const ai = getGeminiClient();
-  const cinematicExpansions = [
-    "cinematic motion picture keyframe, photorealistic, 8k resolution, volumetric atmospheric haze, octane render",
-    "dramatic rim lighting, shallow depth of field, 35mm anamorphic lens, high visual dynamics, masterwork cinematography",
-    "golden hour volumetric god rays, intense cinematic composition, crisp focal clarity, professional color grade",
-    "hyper-realistic film still, high dynamic range, subtle lens flare, award-winning cinematography"
-  ];
-  const chosenExpansion = cinematicExpansions[Math.floor(Math.random() * cinematicExpansions.length)];
-  const enhancedPrompt = `${prompt}. ${chosenExpansion}. Visual style: ${style || "cinematic"}. Camera dynamic: ${motionStyle || "dynamic push-in"}.`;
+  const regenerateCount = typeof inputRegenCount === "number" ? inputRegenCount : 1;
+  const seed = typeof inputSeed === "number" && inputSeed > 0 ? inputSeed : Math.floor(Math.random() * 1000000) + (regenerateCount * 777);
 
-  if (!ai) {
-    // Generates a beautiful fallback mock illustration
+  const creativeStyles = [
+    {
+      name: "Anamorphic Cinema",
+      expansion: "35mm anamorphic lens, cinematic golden hour god rays, shallow depth of field, volumetric haze, hyper-detailed photorealistic keyframe, award-winning cinematography"
+    },
+    {
+      name: "Cyberpunk Neon Volumetric",
+      expansion: "dramatic rainy reflective cityscape, glowing cyan and magenta neon accents, dark atmospheric gloom, volumetric rim light, Octane render 8K"
+    },
+    {
+      name: "Isometric 3D Blueprint",
+      expansion: "clean isometric 3D architectural perspective, holographic wireframe blueprint grid background, glowing particle accents, ultra-sharp 3D ray-traced render"
+    },
+    {
+      name: "Impasto Oil Fine Art",
+      expansion: "expressive impasto oil painting, thick textured palette knife strokes, vibrant rich color contrast, dramatic museum gallery spotlighting"
+    },
+    {
+      name: "Macro Action Close-Up",
+      expansion: "intense high-speed macro action close-up view, focal depth blur, crisp mechanical detail, high dynamic range HDR, dramatic rim lighting"
+    },
+    {
+      name: "Ethereal Pastel Fantasy",
+      expansion: "dreamy pastel atmosphere, volumetric bloom, ethereal golden sunlight, soft painterly landscape backdrop, high visual depth"
+    },
+    {
+      name: "Retro 80s Synthwave",
+      expansion: "chrome wireframe grid horizon, vibrant magenta neon sun, chromatic aberration, retro futuristic aesthetic, dusk twilight sky"
+    },
+    {
+      name: "Sci-Fi Cosmic Horizon",
+      expansion: "deep space nebula particle field, bioluminescent glow, star-dusted cosmic backdrop, hyper-detailed planetary scale view"
+    },
+    {
+      name: "Minimalist Dark Noir",
+      expansion: "high-contrast chiaroscuro lighting, single directional key light, sleek dramatic silhouette, deep shadow play, monochrome mood"
+    }
+  ];
+
+  let styleIndex = (seed + regenerateCount) % creativeStyles.length;
+  if (style && style !== "auto" && style !== "cinematic") {
+    const foundIdx = creativeStyles.findIndex(s => s.name.toLowerCase().includes(style.toLowerCase()) || style.toLowerCase().includes(s.name.toLowerCase()));
+    if (foundIdx !== -1) styleIndex = foundIdx;
+  }
+  const chosenStyle = creativeStyles[styleIndex];
+  const validAspectRatio = (aspectRatio === "9:16" || aspectRatio === "1:1" || aspectRatio === "16:9") ? aspectRatio : "16:9";
+  const enhancedPrompt = `${prompt}. Visual Perspective: ${chosenStyle.name}. Cinematic details: ${chosenStyle.expansion}. Camera angle: ${motionStyle || "dynamic push-in"}. Seed variant #${seed}.`;
+
+  // Tier 1: Try Gemini 3.1 Flash Lite Image model if available
+  if (ai) {
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-flash-lite-image',
+        contents: {
+          parts: [{ text: enhancedPrompt }],
+        },
+        config: {
+          imageConfig: {
+            aspectRatio: validAspectRatio,
+          }
+        },
+      });
+
+      let imageUrl = "";
+      for (const part of response.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData) {
+          const base64EncodeString: string = part.inlineData.data;
+          imageUrl = `data:image/png;base64,${base64EncodeString}`;
+          break;
+        }
+      }
+
+      if (imageUrl) {
+        return res.json({
+          imageUrl,
+          provider: "gemini-3.1-flash-lite-image",
+          styleName: chosenStyle.name,
+          seed,
+          regenerateCount,
+          isSimulated: false,
+          enhancedPrompt
+        });
+      }
+    } catch (err: any) {
+      console.warn("Gemini image generation failed or rate limited, falling back to Pollinations AI Engine:", err?.message || err);
+    }
+  }
+
+  // Tier 2: Open-Source Pollinations.ai FLUX AI Image API Engine
+  try {
+    const width = validAspectRatio === "9:16" ? 720 : validAspectRatio === "1:1" ? 1024 : 1280;
+    const height = validAspectRatio === "9:16" ? 1280 : validAspectRatio === "1:1" ? 1024 : 720;
+    const pollinationsImage = await fetchPollinationsAiImage(enhancedPrompt, seed, width, height);
     return res.json({
-      imageUrl: generateVideoFrameSvgServer(prompt, "Keyframe Synthesis"),
-      isSimulated: true,
+      imageUrl: pollinationsImage,
+      provider: "pollinations-flux-ai",
+      styleName: chosenStyle.name,
+      seed,
+      regenerateCount,
+      isSimulated: false,
       enhancedPrompt
     });
+  } catch (pollinationsErr: any) {
+    console.warn("Pollinations AI fetch timed out or failed, falling back to procedural SVG generator:", pollinationsErr?.message || pollinationsErr);
   }
 
-  try {
-    const validAspectRatio = (aspectRatio === "9:16" || aspectRatio === "1:1" || aspectRatio === "16:9") ? aspectRatio : "16:9";
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-lite-image',
-      contents: {
-        parts: [
-          {
-            text: enhancedPrompt,
-          },
-        ],
-      },
-      config: {
-        imageConfig: {
-          aspectRatio: validAspectRatio,
-        }
-      },
-    });
-
-    let imageUrl = "";
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        const base64EncodeString: string = part.inlineData.data;
-        imageUrl = `data:image/png;base64,${base64EncodeString}`;
-        break;
-      }
-    }
-
-    if (!imageUrl) {
-      throw new Error("No image data returned from Gemini.");
-    }
-
-    res.json({ imageUrl, isSimulated: false, enhancedPrompt });
-  } catch (err: any) {
-    console.error("Frame generation failed, falling back:", err);
-    res.json({
-      imageUrl: generateVideoFrameSvgServer(prompt, "Keyframe Fallback"),
-      isSimulated: true,
-      enhancedPrompt,
-      error: err.message
-    });
-  }
+  // Tier 3: Dynamic Procedural Generative SVG with Seeded Visuals
+  return res.json({
+    imageUrl: generateVideoFrameSvgServer(prompt, `Style: ${chosenStyle.name}`, undefined, seed, chosenStyle.name),
+    provider: "procedural-svg-engine",
+    styleName: chosenStyle.name,
+    seed,
+    regenerateCount,
+    isSimulated: true,
+    enhancedPrompt
+  });
 });
 
 // Helper: Synthesize polyphonic royalty-free ambient BGM track
@@ -1298,7 +1385,7 @@ app.get("/api/audio/bgm-tracks", (req, res) => {
 });
 
 // Dynamic mock generator for sandbox environments
-function getMockVideoScript(prompt: string, urlText?: string) {
+function getMockVideoScript(prompt: string, urlText?: string, refImages?: string[]) {
   const cleanPrompt = prompt.toLowerCase();
   let title = "Custom 1-Minute Short";
   let topic = prompt.replace(/[^a-zA-Z0-9\s]/g, " ").trim() || "AI Innovation";
@@ -1327,6 +1414,9 @@ function getMockVideoScript(prompt: string, urlText?: string) {
   }
 
   const queryBase = topic.split(/\s+/).filter(w => w.length > 2).slice(0, 2).join(",");
+  const scene1Img = (refImages && refImages.length > 0 && refImages[0]) 
+    ? refImages[0] 
+    : generateVideoFrameSvgServer(title.toUpperCase(), "Role Breakdown & Highlights", 1);
 
   return {
     title: title,
@@ -1340,7 +1430,7 @@ function getMockVideoScript(prompt: string, urlText?: string) {
         narration: `Are you ready to unlock the true potential of this incredible ${topic}? Let's break down this role in under sixty seconds.`,
         textOverlay: title.toUpperCase(),
         cameraMotion: "Slow pull-back showing network nodes",
-        imageUrl: generateVideoFrameSvgServer(title.toUpperCase(), "Role Breakdown & Highlights", 1)
+        imageUrl: scene1Img
       },
       {
         sceneNumber: 2,
@@ -1609,6 +1699,21 @@ function getSimulatedClassification(prompt: string) {
     credits += 8;
   }
 
+  // Always include Step 5: Master Production Aggregation
+  intents.push("master");
+  steps.push({
+    stepNumber: steps.length + 1,
+    type: "master",
+    modelName: "NVIDIA Omniverse Master Orchestrator",
+    modelId: "omniverse-master-orchestrator",
+    prompt: `Unify all visual, video, audio narration, and code assets into one master production: ${prompt}`,
+    presets: {
+      resolution: "4K Cinema",
+      composition: "Synchronized Ken Burns Pan & Audio"
+    }
+  });
+  credits += 15;
+
   return {
     originalPrompt: prompt,
     intentsDetected: intents,
@@ -1677,6 +1782,77 @@ Always maintain session context. Make credit costs realistic: image = 4, video =
     console.error("Classification error:", err);
     res.json({
       ...getSimulatedClassification(prompt),
+      isSimulated: true
+    });
+  }
+});
+
+// 7b. Prompt Harmonization & Alignment Engine Endpoint
+app.post("/api/multimodal/align-prompts", async (req, res) => {
+  const { basePrompt, triggerStepNumber } = req.body;
+  if (!basePrompt || typeof basePrompt !== "string") {
+    return res.status(400).json({ error: "basePrompt is required." });
+  }
+
+  const ai = getGeminiClient();
+
+  if (!ai) {
+    const cleanPrompt = basePrompt.trim();
+    return res.json({
+      alignedPrompts: {
+        1: `High-resolution 8k concept frame of: ${cleanPrompt}, photorealistic rendering, volumetric lighting, crisp composition`,
+        2: `Cinematic camera motion sweep around ${cleanPrompt}, smooth tracking movement, dramatic lighting and atmospheric depth`,
+        3: `Ion drive propulsion active and telemetry stabilized for: ${cleanPrompt}`,
+        4: `Interactive HUD telemetry dashboard for ${cleanPrompt} with real-time speed gauges and mission status readouts`,
+        5: `Unified Production: Integrate concept frame, motion video, voiceover, and telemetry dashboard for ${cleanPrompt}`
+      },
+      isSimulated: true
+    });
+  }
+
+  try {
+    const systemPrompt = `You are an AI Prompt Alignment Engine for a multimodal pipeline.
+Given a user's specific concept prompt, output harmonized, synchronized prompts for each step in the pipeline (1: image concept frame, 2: temporal motion video, 3: voice narration, 4: telemetry dashboard UI code, 5: master unified production).
+Ensure that the image concept and video motion align directly to the exact visual details, lighting, subject, and style of the user prompt.
+
+Respond strictly with a valid JSON object matching:
+{
+  "alignedPrompts": {
+    "1": string (image concept prompt),
+    "2": string (video motion prompt),
+    "3": string (voiceover speech narration),
+    "4": string (telemetry HUD code UI prompt),
+    "5": string (master production prompt)
+  }
+}`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `Harmonize and align all 5 pipeline step prompts for concept: "${basePrompt}"`,
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: "application/json",
+        temperature: 0.3
+      }
+    });
+
+    const clean = (response.text || "{}").replace(/```json/g, "").replace(/```/g, "").trim();
+    const parsed = JSON.parse(clean);
+    return res.json({
+      alignedPrompts: parsed.alignedPrompts,
+      isSimulated: false
+    });
+  } catch (err: any) {
+    console.error("Prompt alignment failed:", err);
+    const cleanPrompt = basePrompt.trim();
+    return res.json({
+      alignedPrompts: {
+        1: `High-resolution 8k concept frame of: ${cleanPrompt}, photorealistic rendering, volumetric lighting`,
+        2: `Cinematic camera motion sweep around ${cleanPrompt}, tracking camera motion`,
+        3: `Telemetry voiceover for ${cleanPrompt}`,
+        4: `Telemetry HUD dashboard for ${cleanPrompt}`,
+        5: `Master Production for ${cleanPrompt}`
+      },
       isSimulated: true
     });
   }
