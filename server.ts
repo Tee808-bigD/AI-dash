@@ -61,6 +61,21 @@ function getGeminiClient() {
   });
 }
 
+// Helper to detect rate-limits or quota errors from Gemini API
+function isQuotaOrRateLimitError(err: any): boolean {
+  if (!err) return false;
+  const str = String(err?.message || err?.status || err?.code || err || "").toLowerCase();
+  return (
+    str.includes("quota") ||
+    str.includes("429") ||
+    str.includes("exhausted") ||
+    str.includes("resource_exhausted") ||
+    str.includes("limit") ||
+    str.includes("rate") ||
+    str.includes("too many requests")
+  );
+}
+
 // Map catalog IDs to valid NVIDIA NIM model identifiers for the hosted endpoint
 function mapToNvidiaModel(modelId: string): string {
   switch (modelId) {
@@ -384,7 +399,18 @@ ${systemInstruction || ""}`;
       isSimulated: false
     });
   } catch (error: any) {
-    console.error(`Error in proxy simulation for ${modelId}:`, error);
+    if (isQuotaOrRateLimitError(error)) {
+      console.warn(`[Rate Limit] Gemini API rate-limited during chat proxy for ${modelId}. Falling back to simulated response.`);
+      const responseText = `### [${modelInfo.name} Assistant]\n\n\`\`\`typescript\n// ${modelInfo.provider}'s ${modelInfo.name}\n// Query: "${message}"\nexport const response = async () => {\n  return { ok: true, source: "${modelInfo.name}" };\n};\n\`\`\`\n\nI am ${modelInfo.name}. ${modelInfo.desc}.`;
+      const totalTokens = Math.round((message.length + responseText.length) / 4);
+      return res.json({
+        text: responseText,
+        tokens: totalTokens,
+        latencyMs: 150,
+        isSimulated: true
+      });
+    }
+    console.error(`Error in proxy simulation for ${modelId}:`, error?.message || error);
     res.status(500).json({ 
       error: error?.message || "An error occurred during model proxy evaluation." 
     });
@@ -550,7 +576,18 @@ ${systemInstruction || ""}`;
       isSimulated: false
     });
   } catch (error: any) {
-    console.error(`Gemini evaluation error for model ${modelId}:`, error);
+    if (isQuotaOrRateLimitError(error)) {
+      console.warn(`[Rate Limit] Gemini API rate-limited during model evaluation for ${modelId}. Returning simulated evaluation output.`);
+      const responseText = `### [${modelInfo.name} Evaluation Output]\n\n\`\`\`typescript\n// ${modelInfo.provider}'s ${modelInfo.name}\n// Prompt: "${prompt}"\nexport const runEvaluation = async () => {\n  return { status: "success", model: "${modelInfo.id}" };\n};\n\`\`\`\n\n*Evaluation completed via high-fidelity model benchmark profile.*`;
+      const tokens = Math.round((prompt.length + responseText.length) / 4);
+      return res.json({
+        text: responseText,
+        tokens,
+        latencyMs: 180,
+        isSimulated: true
+      });
+    }
+    console.error(`Gemini evaluation error for model ${modelId}:`, error?.message || error);
     res.status(500).json({ 
       error: error?.message || `Failed to generate evaluation response for ${modelId}.`
     });
@@ -622,7 +659,7 @@ async function fetchPollinationsAiImage(prompt: string, seed: number, width = 12
   const cleanPrompt = prompt.substring(0, 400);
   const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?seed=${seed}&width=${width}&height=${height}&nologo=true&enhance=true&model=flux`;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 6500);
+  const timeoutId = setTimeout(() => controller.abort(), 4000);
   try {
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
@@ -633,7 +670,7 @@ async function fetchPollinationsAiImage(prompt: string, seed: number, width = 12
     return `data:image/jpeg;base64,${buffer.toString("base64")}`;
   } catch (err: any) {
     clearTimeout(timeoutId);
-    throw err;
+    throw new Error(err.name === "AbortError" ? "Pollinations AI request timed out" : (err.message || "Pollinations AI fetch failed"));
   }
 }
 
@@ -813,11 +850,9 @@ Aspect Ratio: ${aspectRatio || "9:16"} (Short-form portrait)`;
       scrapedLength: parsedUrlContent.length
     });
   } catch (error: any) {
-    console.error("Failed to generate short script:", error);
-    const errString = String(error?.message || "").toLowerCase();
-    if (errString.includes("quota") || errString.includes("exhausted") || errString.includes("limit") || errString.includes("billing") || errString.includes("key") || errString.includes("rate_limit")) {
-      console.warn("Quota exceeded or rate limit hit on Gemini. Falling back to high-fidelity simulated script.");
-      const mockResult = getMockVideoScript(prompt, parsedUrlContent);
+    if (isQuotaOrRateLimitError(error)) {
+      console.warn("[Rate Limit] Quota exceeded or rate limit hit on Gemini. Falling back to high-fidelity simulated script.");
+      const mockResult = getMockVideoScript(prompt, parsedUrlContent, images);
       return res.json({
         ...mockResult,
         isSimulated: true,
@@ -825,6 +860,7 @@ Aspect Ratio: ${aspectRatio || "9:16"} (Short-form portrait)`;
         fallbackMessage: "AI model rate-limit reached. Gracefully displaying simulated high-fidelity short-form script."
       });
     }
+    console.error("Failed to generate short script:", error?.message || error);
     res.status(500).json({
       error: error?.message || "Failed to compile AI short-form storyboard."
     });
@@ -1147,7 +1183,11 @@ app.post("/api/video/generate-frame", async (req, res) => {
         });
       }
     } catch (err: any) {
-      console.warn("Gemini image generation failed or rate limited, falling back to Pollinations AI Engine:", err?.message || err);
+      if (isQuotaOrRateLimitError(err)) {
+        console.warn("[Rate Limit] Gemini image model hit quota/rate limit. Switching to Pollinations AI.");
+      } else {
+        console.warn("[Fallback] Gemini image model unavailable, switching to Pollinations AI.");
+      }
     }
   }
 
@@ -1166,7 +1206,7 @@ app.post("/api/video/generate-frame", async (req, res) => {
       enhancedPrompt
     });
   } catch (pollinationsErr: any) {
-    console.warn("Pollinations AI fetch timed out or failed, falling back to procedural SVG generator:", pollinationsErr?.message || pollinationsErr);
+    console.warn("[Fallback] Pollinations AI fetch unavailable or timed out. Rendering procedural SVG keyframe.");
   }
 
   // Tier 3: Dynamic Procedural Generative SVG with Seeded Visuals
@@ -1779,7 +1819,11 @@ Always maintain session context. Make credit costs realistic: image = 4, video =
       isSimulated: false
     });
   } catch (err: any) {
-    console.error("Classification error:", err);
+    if (isQuotaOrRateLimitError(err)) {
+      console.warn("[Rate Limit] Gemini classification model rate limited, returning simulated intent classification.");
+    } else {
+      console.error("Classification error:", err?.message || err);
+    }
     res.json({
       ...getSimulatedClassification(prompt),
       isSimulated: true
@@ -1843,7 +1887,11 @@ Respond strictly with a valid JSON object matching:
       isSimulated: false
     });
   } catch (err: any) {
-    console.error("Prompt alignment failed:", err);
+    if (isQuotaOrRateLimitError(err)) {
+      console.warn("[Rate Limit] Gemini prompt alignment engine rate limited, returning template aligned prompts.");
+    } else {
+      console.error("Prompt alignment failed:", err?.message || err);
+    }
     const cleanPrompt = basePrompt.trim();
     return res.json({
       alignedPrompts: {
@@ -1903,7 +1951,11 @@ Rules:
       isSimulated: false
     });
   } catch (err: any) {
-    console.error("Website generator failure:", err);
+    if (isQuotaOrRateLimitError(err)) {
+      console.warn("[Rate Limit] Website generator model rate limited, returning simulated website HTML code bundle.");
+    } else {
+      console.error("Website generator failure:", err?.message || err);
+    }
     res.json({
       ...getMockWebsiteHtml(prompt, themeColor || "#4318FF", layoutType),
       isSimulated: true
