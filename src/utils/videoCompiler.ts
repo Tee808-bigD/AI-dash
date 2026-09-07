@@ -1,4 +1,4 @@
-// Utility to compile animated canvas video frames into a downloadable MP4/WebM file
+// Utility to compile animated canvas video frames into a downloadable MP4/WebM file with full audio
 
 export interface VideoCompileOptions {
   title: string;
@@ -14,6 +14,73 @@ export interface VideoCompileOptions {
     duration?: number;
   }>;
   onProgress?: (progressPct: number, statusText: string) => void;
+}
+
+// Helper to synthesize atmospheric cinematic background pad
+function addAmbientSoundtrack(audioCtx: AudioContext, destination: MediaStreamAudioDestinationNode, durationSec: number) {
+  const freqs = [130.81, 164.81, 196.00, 261.63]; // C3, E3, G3, C4
+  freqs.forEach((freq, idx) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const filter = audioCtx.createBiquadFilter();
+
+    osc.type = idx % 2 === 0 ? "sine" : "triangle";
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(350 + idx * 80, audioCtx.currentTime);
+
+    gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.06, audioCtx.currentTime + 1.2);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + durationSec);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(destination);
+
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + durationSec);
+  });
+}
+
+// Helper to fetch voice narration audio and route to Web Audio stream
+async function attachVoiceToDestination(
+  audioCtx: AudioContext,
+  destination: MediaStreamAudioDestinationNode,
+  text: string,
+  delaySec: number
+): Promise<void> {
+  if (!text || !text.trim()) return;
+
+  try {
+    const res = await fetch("/api/video/generate-voice", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.audioDataUrl) {
+        const audioRes = await fetch(data.audioDataUrl);
+        const arrayBuffer = await audioRes.arrayBuffer();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+        const source = audioCtx.createBufferSource();
+        source.buffer = audioBuffer;
+
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.9, audioCtx.currentTime);
+
+        source.connect(gain);
+        gain.connect(destination);
+
+        source.start(audioCtx.currentTime + delaySec);
+      }
+    }
+  } catch (err) {
+    console.warn("Could not attach voice narration to stream:", err);
+  }
 }
 
 export async function downloadCompiledVideo(options: VideoCompileOptions): Promise<void> {
@@ -65,7 +132,6 @@ export async function downloadCompiledVideo(options: VideoCompileOptions): Promi
       img.crossOrigin = "anonymous";
       img.onload = () => resolve(img);
       img.onerror = () => {
-        // Fallback placeholder image if cors or load error
         const fallback = new Image();
         fallback.onload = () => resolve(fallback);
         fallback.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
@@ -87,13 +153,45 @@ export async function downloadCompiledVideo(options: VideoCompileOptions): Promi
     activeScenes.map(s => loadImage(s.imageUrl || imageUrl))
   );
 
-  if (onProgress) onProgress(25, "Initializing MediaRecorder video stream...");
+  if (onProgress) onProgress(20, "Synthesizing AI Voiceover & Audio Stream...");
 
-  // Setup canvas stream and recorder
-  const stream = canvas.captureStream(30); // 30 FPS
-  
+  // Setup Web Audio Context for audio tracks
+  const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+  const audioCtx = new AudioCtxClass();
+  if (audioCtx.state === "suspended") {
+    await audioCtx.resume();
+  }
+
+  const audioDest = audioCtx.createMediaStreamDestination();
+
+  // Total duration & FPS
+  const fps = 30;
+  const totalDurationSec = activeScenes.reduce((acc, s) => acc + (s.duration || durationSeconds), 0);
+
+  // 1. Add background ambient music track
+  addAmbientSoundtrack(audioCtx, audioDest, totalDurationSec);
+
+  // 2. Attach voice narrations for all scenes
+  let timeOffset = 0.2;
+  for (const scene of activeScenes) {
+    const speechText = scene.narration || narration || prompt;
+    await attachVoiceToDestination(audioCtx, audioDest, speechText, timeOffset);
+    timeOffset += (scene.duration || durationSeconds);
+  }
+
+  if (onProgress) onProgress(35, "Initializing MediaRecorder video + audio stream...");
+
+  // Combine Canvas Video Track + Web Audio Track
+  const videoTrack = canvas.captureStream(30).getVideoTracks()[0];
+  const audioTrack = audioDest.stream.getAudioTracks()[0];
+
+  const combinedStream = new MediaStream([videoTrack, audioTrack]);
+
   // Choose supported MIME type
-  let mimeType = "video/webm;codecs=vp9";
+  let mimeType = "video/webm;codecs=vp9,opus";
+  if (!MediaRecorder.isTypeSupported(mimeType)) {
+    mimeType = "video/webm;codecs=vp8,opus";
+  }
   if (!MediaRecorder.isTypeSupported(mimeType)) {
     mimeType = "video/webm";
   }
@@ -102,7 +200,7 @@ export async function downloadCompiledVideo(options: VideoCompileOptions): Promi
   }
 
   const recordedChunks: Blob[] = [];
-  const recorder = new MediaRecorder(stream, { mimeType });
+  const recorder = new MediaRecorder(combinedStream, { mimeType });
 
   recorder.ondataavailable = (e) => {
     if (e.data && e.data.size > 0) {
@@ -112,9 +210,6 @@ export async function downloadCompiledVideo(options: VideoCompileOptions): Promi
 
   recorder.start(100);
 
-  // Total duration & FPS
-  const fps = 30;
-  const totalDurationSec = activeScenes.reduce((acc, s) => acc + (s.duration || durationSeconds), 0);
   const totalFrames = Math.max(fps * 2, Math.round(totalDurationSec * fps));
   let frameIndex = 0;
 
@@ -220,7 +315,7 @@ export async function downloadCompiledVideo(options: VideoCompileOptions): Promi
         ctx.fillStyle = "#00d4ff";
         ctx.font = "bold 12px monospace";
         ctx.textAlign = "left";
-        ctx.fillText(`● REC 60FPS`, 60, 63);
+        ctx.fillText(`● REC AUDIO+60FPS`, 60, 63);
 
         // 7. Bottom Progress Line
         ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
@@ -231,15 +326,15 @@ export async function downloadCompiledVideo(options: VideoCompileOptions): Promi
         frameIndex++;
 
         if (onProgress) {
-          const calcPct = Math.min(30 + Math.round(progressPct * 65), 95);
-          onProgress(calcPct, `Rendering Frame ${frameIndex} of ${totalFrames}...`);
+          const calcPct = Math.min(40 + Math.round(progressPct * 55), 95);
+          onProgress(calcPct, `Recording Frame ${frameIndex} of ${totalFrames} (with Audio)...`);
         }
 
         // Finish condition
         if (frameIndex >= totalFrames) {
           clearInterval(renderLoop);
           
-          if (onProgress) onProgress(98, "Finishing video stream encoding...");
+          if (onProgress) onProgress(98, "Finishing video + audio stream encoding...");
 
           recorder.stop();
           recorder.onstop = () => {
@@ -259,6 +354,7 @@ export async function downloadCompiledVideo(options: VideoCompileOptions): Promi
             setTimeout(() => {
               document.body.removeChild(a);
               URL.revokeObjectURL(url);
+              audioCtx.close();
               if (onProgress) onProgress(100, "Download complete!");
               resolve();
             }, 200);
@@ -266,8 +362,10 @@ export async function downloadCompiledVideo(options: VideoCompileOptions): Promi
         }
       } catch (err) {
         clearInterval(renderLoop);
+        audioCtx.close();
         reject(err);
       }
     }, 1000 / fps);
   });
 }
+

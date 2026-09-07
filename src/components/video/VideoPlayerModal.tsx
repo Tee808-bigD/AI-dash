@@ -67,22 +67,70 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 
   const totalDuration = activeScenes.reduce((acc, s) => acc + (s.duration || durationSeconds), 0);
 
-  // Speech synthesis narrator
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // AI Voiceover Audio player & fallback speech synthesis
   useEffect(() => {
-    if (!isOpen || isMuted || typeof window === "undefined" || !window.speechSynthesis) return;
+    if (!isOpen || isMuted) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      return;
+    }
 
     const activeScene = activeScenes[activeSceneIdx] || activeScenes[0];
     const speechText = activeScene.narration || narration || prompt;
 
-    window.speechSynthesis.cancel();
-    if (isPlaying && speechText) {
-      const utterance = new SpeechSynthesisUtterance(speechText);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      window.speechSynthesis.speak(utterance);
-    }
+    if (!speechText) return;
+
+    let isCancelled = false;
+
+    const playVoice = async () => {
+      try {
+        const res = await fetch("/api/video/generate-voice", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: speechText })
+        });
+
+        if (res.ok && !isCancelled) {
+          const data = await res.json();
+          if (data.audioDataUrl && isPlaying) {
+            if (audioRef.current) {
+              audioRef.current.pause();
+            }
+            const audio = new Audio(data.audioDataUrl);
+            audioRef.current = audio;
+            audio.play().catch(() => {});
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("AI Voice generation fallback to speechSynthesis:", err);
+      }
+
+      // Fallback to Web Speech API
+      if (!isCancelled && typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        if (isPlaying) {
+          const utterance = new SpeechSynthesisUtterance(speechText);
+          utterance.rate = 1.0;
+          utterance.pitch = 1.0;
+          window.speechSynthesis.speak(utterance);
+        }
+      }
+    };
+
+    playVoice();
 
     return () => {
+      isCancelled = true;
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
       if (typeof window !== "undefined" && window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
