@@ -1,4 +1,5 @@
 import React, { useRef, useEffect } from "react";
+import { getFallbackVideoFrame } from "../../utils/fallbackImage";
 import { 
   calculateCameraTransform, 
   renderAtmosphericVfx, 
@@ -58,7 +59,14 @@ export default function LiveDynamicCanvasPlayer({
     img.onload = () => {
       activeImageRef.current = img;
     };
-  }, [imageUrl]);
+    img.onerror = () => {
+      const fallbackImg = new Image();
+      fallbackImg.src = getFallbackVideoFrame(textOverlay || narrationText || `Scene ${sceneNumber}`, sceneNumber);
+      fallbackImg.onload = () => {
+        activeImageRef.current = fallbackImg;
+      };
+    };
+  }, [imageUrl, narrationText, sceneNumber, textOverlay]);
 
   // Canvas dimensions based on aspect ratio
   const width = aspectRatio === "9:16" ? 360 : aspectRatio === "1:1" ? 480 : 640;

@@ -617,6 +617,48 @@ async function scrapeWebpageText(url: string): Promise<string> {
   }
 }
 
+function generateVideoFrameSvgServer(title: string, subtitle?: string, sceneNum?: number): string {
+  const safeTitle = (title || "NVIDIA VideoGPT Frame").replace(/[<>&'"]/g, "").substring(0, 45);
+  const safeSubtitle = (subtitle || "Dynamic Motion Interpolation").replace(/[<>&'"]/g, "").substring(0, 50);
+  const numStr = sceneNum ? `SCENE 0${sceneNum}` : "NVIDIA VIDEOGPT";
+
+  const colors = [
+    { bg1: "#0f172a", bg2: "#311042", accent1: "#a855f7", accent2: "#ec4899" },
+    { bg1: "#030712", bg2: "#0f2e3d", accent1: "#06b6d4", accent2: "#3b82f6" },
+    { bg1: "#111827", bg2: "#1f2937", accent1: "#10b981", accent2: "#06b6d4" },
+    { bg1: "#18181b", bg2: "#3f3f46", accent1: "#f59e0b", accent2: "#ef4444" },
+    { bg1: "#09090b", bg2: "#27272a", accent1: "#6366f1", accent2: "#a855f7" }
+  ];
+  const c = colors[(sceneNum || 1) % colors.length];
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450">
+    <defs>
+      <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="${c.bg1}"/>
+        <stop offset="100%" stop-color="${c.bg2}"/>
+      </linearGradient>
+      <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="${c.accent1}"/>
+        <stop offset="100%" stop-color="${c.accent2}"/>
+      </linearGradient>
+    </defs>
+    <rect width="800" height="450" fill="url(#bgGrad)"/>
+    <circle cx="400" cy="200" r="220" fill="${c.accent1}" opacity="0.12" filter="blur(50px)"/>
+    <path d="M-100,350 Q200,150 400,280 T900,100" stroke="url(#lineGrad)" stroke-width="3" fill="none" opacity="0.5"/>
+    <path d="M-100,100 Q300,400 600,200 T1000,350" stroke="url(#lineGrad)" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity="0.3"/>
+    <rect x="40" y="40" width="720" height="370" rx="12" fill="none" stroke="${c.accent1}" stroke-width="1" stroke-dasharray="4 4" opacity="0.3"/>
+    <rect x="60" y="60" width="150" height="26" rx="6" fill="#000000" opacity="0.6"/>
+    <text x="135" y="77" font-family="monospace" font-size="10" font-weight="bold" fill="${c.accent1}" text-anchor="middle">${numStr} • 60 FPS</text>
+    <rect x="200" y="140" width="400" height="170" rx="16" fill="#090d16" stroke="url(#lineGrad)" stroke-width="1.5" opacity="0.95"/>
+    <circle cx="400" cy="200" r="26" fill="${c.accent1}" opacity="0.9"/>
+    <polygon points="393,189 415,200 393,211" fill="#ffffff"/>
+    <text x="400" y="258" font-family="system-ui, sans-serif" font-size="15" font-weight="800" fill="#f8fafc" text-anchor="middle">${safeTitle}</text>
+    <text x="400" y="280" font-family="system-ui, sans-serif" font-size="11" font-weight="500" fill="#94a3b8" text-anchor="middle">${safeSubtitle}</text>
+  </svg>`;
+
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 // 5b. Dynamic AI 1-Minute Short Video and Script Generator Endpoint
 app.post("/api/video/generate", async (req, res) => {
   const { prompt, url, images, style, aspectRatio } = req.body;
@@ -730,7 +772,7 @@ Aspect Ratio: ${aspectRatio || "9:16"} (Short-form portrait)`;
         const uniqueTags = Array.from(new Set(words)).slice(0, 3);
         const queryTerm = uniqueTags.length > 0 ? uniqueTags.join(",") : "technology,abstract";
         
-        const imageUrl = `https://images.unsplash.com/featured/800x600/?${encodeURIComponent(queryTerm)}&sig=${idx}_${Math.floor(Math.random() * 100)}`;
+        const imageUrl = generateVideoFrameSvgServer(scene.textOverlay || scene.visualDescription || "Scene Keyframe", scene.narration, idx + 1);
         return {
           ...scene,
           imageUrl
@@ -1002,14 +1044,8 @@ app.post("/api/video/generate-frame", async (req, res) => {
 
   if (!ai) {
     // Generates a beautiful fallback mock illustration
-    const sampleThemes = [
-      "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?q=80&w=800&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=800&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=800&auto=format&fit=crop"
-    ];
     return res.json({
-      imageUrl: sampleThemes[Math.floor(Math.random() * sampleThemes.length)],
+      imageUrl: generateVideoFrameSvgServer(prompt, "Keyframe Synthesis"),
       isSimulated: true,
       enhancedPrompt
     });
@@ -1049,11 +1085,8 @@ app.post("/api/video/generate-frame", async (req, res) => {
     res.json({ imageUrl, isSimulated: false, enhancedPrompt });
   } catch (err: any) {
     console.error("Frame generation failed, falling back:", err);
-    // Fallback to high-quality Unsplash image based on prompt
-    const cleanTags = prompt.replace(/[^a-zA-Z0-9\s]/g, "").split(/\s+/).slice(0, 2).join(",");
-    const fallbackUrl = `https://images.unsplash.com/featured/800x600/?${encodeURIComponent(cleanTags || "cinema,technology")}&sig=${Date.now() % 1000}`;
     res.json({
-      imageUrl: fallbackUrl,
+      imageUrl: generateVideoFrameSvgServer(prompt, "Keyframe Fallback"),
       isSimulated: true,
       enhancedPrompt,
       error: err.message
@@ -1307,7 +1340,7 @@ function getMockVideoScript(prompt: string, urlText?: string) {
         narration: `Are you ready to unlock the true potential of this incredible ${topic}? Let's break down this role in under sixty seconds.`,
         textOverlay: title.toUpperCase(),
         cameraMotion: "Slow pull-back showing network nodes",
-        imageUrl: `https://images.unsplash.com/featured/800x600/?${encodeURIComponent(queryBase || "technology")},intro&sig=1_${Math.floor(Math.random() * 100)}`
+        imageUrl: generateVideoFrameSvgServer(title.toUpperCase(), "Role Breakdown & Highlights", 1)
       },
       {
         sceneNumber: 2,
@@ -1316,7 +1349,7 @@ function getMockVideoScript(prompt: string, urlText?: string) {
         narration: `This role focuses on scaling secure infrastructure and building high-performance endpoints. Here is what they are looking for.`,
         textOverlay: "KEY RESPONSIBILITIES",
         cameraMotion: "Truck right along the digital interfaces",
-        imageUrl: `https://images.unsplash.com/featured/800x600/?${encodeURIComponent(queryBase || "workspace")},office,charts&sig=2_${Math.floor(Math.random() * 100)}`
+        imageUrl: generateVideoFrameSvgServer("KEY RESPONSIBILITIES", "Architecture & Backend Scaling", 2)
       },
       {
         sceneNumber: 3,
@@ -1325,7 +1358,7 @@ function getMockVideoScript(prompt: string, urlText?: string) {
         narration: `You will design clean, reliable Express API endpoints, containerize apps with Docker, and integrate state-of-the-art AI models.`,
         textOverlay: "TECH STACK",
         cameraMotion: "Slow crane down to center keyboard",
-        imageUrl: `https://images.unsplash.com/featured/800x600/?${encodeURIComponent(queryBase || "programming")},laptop,code&sig=3_${Math.floor(Math.random() * 100)}`
+        imageUrl: generateVideoFrameSvgServer("TECH STACK", "Node.js, Express, Docker & AI", 3)
       },
       {
         sceneNumber: 4,
@@ -1334,7 +1367,7 @@ function getMockVideoScript(prompt: string, urlText?: string) {
         narration: `Benefits include a competitive remote package, flexible hours, and working alongside world-class engineering teams.`,
         textOverlay: "BENEFITS & PERKS",
         cameraMotion: "Zoom in on key metrics",
-        imageUrl: `https://images.unsplash.com/featured/800x600/?${encodeURIComponent(queryBase || "perks")},team,growth&sig=4_${Math.floor(Math.random() * 100)}`
+        imageUrl: generateVideoFrameSvgServer("BENEFITS & PERKS", "Competitive Remote Package", 4)
       },
       {
         sceneNumber: 5,
@@ -1343,7 +1376,7 @@ function getMockVideoScript(prompt: string, urlText?: string) {
         narration: lastNarration,
         textOverlay: lastTextOverlay,
         cameraMotion: "Steady push-in with gentle lens flare",
-        imageUrl: `https://images.unsplash.com/featured/800x600/?${encodeURIComponent(queryBase || "success")},startup,launch&sig=5_${Math.floor(Math.random() * 100)}`
+        imageUrl: generateVideoFrameSvgServer(lastTextOverlay, "Apply Directly Via Link Below", 5)
       }
     ]
   };

@@ -34,6 +34,7 @@ import VisualChainingCanvas from "./VisualChainingCanvas";
 import DeveloperCodeModal from "./DeveloperCodeModal";
 import PromptOptimizerModal from "./PromptOptimizerModal";
 import MediaAssetBin from "./MediaAssetBin";
+import { getFallbackVideoFrame } from "../utils/fallbackImage";
 
 export interface SuggestedStep {
   stepNumber: number;
@@ -261,13 +262,13 @@ export default function MultimodalHub() {
         
         if (response.ok) {
           // Select the first generated scene's image as the preview
-          const firstSceneImg = data.scenes?.[0]?.imageUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe";
+          const firstSceneImg = data.scenes?.[0]?.imageUrl || getFallbackVideoFrame(step.prompt);
           setStepOutputs(prev => ({
             ...prev,
             [step.stepNumber]: {
               status: "completed",
               outputUrl: firstSceneImg,
-              textResult: `**Video Title**: ${data.title}\n**Scenes compiled**: ${data.scenes?.length} dynamic frames.`,
+              textResult: `**Video Title**: ${data.title}\n**Scenes compiled**: ${data.scenes?.length || 5} dynamic 12s frames.`,
               latencyMs: latency
             }
           }));
@@ -697,6 +698,10 @@ export default function MultimodalHub() {
                                   alt="Step Output" 
                                   className="object-cover w-full h-full rounded-lg"
                                   referrerPolicy="no-referrer"
+                                  onError={(e) => {
+                                    e.currentTarget.onerror = null;
+                                    e.currentTarget.src = getFallbackVideoFrame(step.prompt);
+                                  }}
                                 />
                               )}
                               {isVideo && output.outputUrl && (
@@ -706,6 +711,10 @@ export default function MultimodalHub() {
                                     alt="Step Output Video First Frame" 
                                     className="object-cover w-full h-full rounded-lg blur-[1px]"
                                     referrerPolicy="no-referrer"
+                                    onError={(e) => {
+                                      e.currentTarget.onerror = null;
+                                      e.currentTarget.src = getFallbackVideoFrame(step.prompt);
+                                    }}
                                   />
                                   <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                                     <Film className="text-white drop-shadow-md animate-bounce" size={24} />

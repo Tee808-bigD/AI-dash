@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { getFallbackVideoFrame } from "../utils/fallbackImage";
 import { 
   Sparkles, 
   Play, 
@@ -385,6 +386,10 @@ export default function VisualChainingCanvas({
                       alt="Synthesized Frame" 
                       className="w-full h-full object-cover"
                       referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = getFallbackVideoFrame(imageStep.prompt);
+                      }}
                     />
                   ) : (
                     <div className="text-center text-slate-600">
@@ -617,6 +622,10 @@ export default function VisualChainingCanvas({
                         alt="Video Motion Preview" 
                         className="w-full h-full object-cover"
                         referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = getFallbackVideoFrame(videoStep.prompt);
+                        }}
                       />
                       <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                         <div className="p-2 rounded-full bg-white/20 backdrop-blur-sm">
